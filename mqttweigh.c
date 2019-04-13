@@ -43,7 +43,7 @@ main (int argc, const char *argv[])
 #ifdef  SQLDATABASE
    const char *sqldb = QUOTE (SQLDATABASE);
 #else
-   const char *sqldb = "weight";
+   const char *sqldb = "weigh";
 #endif
 #ifdef  SQLTABLE
    const char *sqltable = QUOTE (SQLTABLE);
@@ -73,24 +73,25 @@ main (int argc, const char *argv[])
 #ifdef  MQTTTOPIC
    const char *mqtttopic = QUOTE (MQTTTOPIC);
 #else
-   const char *mqtttopic = "tele/scales/RESULT";        // Tasmota Serial received logic
+   const char *mqtttopic = "tele/#/RESULT";     // Tasmota Serial received logic
 #endif
    {                            // POPT
       poptContext optCon;       // context for parsing command-line options
       const struct poptOption optionsTable[] = {
 	      // *INDENT-OFF*
-         {"mqtt-host", 0, POPT_ARG_STRING | (mqtthost ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &mqtthost, 0, "MQTT hostname", "Hostname"},
-         {"mqtt-user", 0, POPT_ARG_STRING | (mqttuser ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &mqttuser, 0, "MQTT username", "Username"},
-         {"mqtt-pass", 0, POPT_ARG_STRING | (mqttpass ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &mqttpass, 0, "MQTT password", "Password"},
+         {"mqtt-host", 'h', POPT_ARG_STRING | (mqtthost ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &mqtthost, 0, "MQTT hostname", "Hostname"},
+         {"mqtt-user", 'u', POPT_ARG_STRING | (mqttuser ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &mqttuser, 0, "MQTT username", "Username"},
+         {"mqtt-pass", 'P', POPT_ARG_STRING | (mqttpass ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &mqttpass, 0, "MQTT password", "Password"},
          {"mqtt-id", 0, POPT_ARG_STRING | (mqttid ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &mqttid, 0, "MQTT ID", "ID"},
-         {"mqtt-topic", 0, POPT_ARG_STRING | (mqtttopic ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &mqtttopic, 0, "MQTT topic", "Topic"},
-         {"sql-config", 0, POPT_ARG_STRING | (sqlconfig ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &sqlconfig, 0, "MQTT config", "Filename"},
-         {"sql-host", 0, POPT_ARG_STRING | (sqlhost ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &sqlhost, 0, "MQTT hostname", "Hostname"},
+         {"mqtt-topic", 't', POPT_ARG_STRING | (mqtttopic ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &mqtttopic, 0, "MQTT topic", "Topic"},
+         {"sql-config", 'c', POPT_ARG_STRING | (sqlconfig ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &sqlconfig, 0, "MQTT config", "Filename"},
+         {"sql-host", 's', POPT_ARG_STRING | (sqlhost ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &sqlhost, 0, "MQTT hostname", "Hostname"},
          {"sql-user", 0, POPT_ARG_STRING | (sqluser ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &sqluser, 0, "MQTT username", "Username"},
          {"sql-pass", 0, POPT_ARG_STRING | (sqlpass ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &sqlpass, 0, "MQTT password", "Password"},
-         {"sql-database", 0, POPT_ARG_STRING | (sqldb ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &sqldb, 0, "MQTT database", "Database"},
-         {"sql-table", 0, POPT_ARG_STRING | (sqltable ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &sqltable, 0, "MQTT table", "Table"},
-         {"debug", 'v', POPT_ARG_NONE, &debug, 0, "Debug"},
+         {"sql-database", 'd', POPT_ARG_STRING | (sqldb ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &sqldb, 0, "MQTT database", "Database"},
+         {"sql-table", 't', POPT_ARG_STRING | (sqltable ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &sqltable, 0, "MQTT table", "Table"},
+         {"sql-debug", 'v', POPT_ARG_NONE, &sqldebug, 0, "SQL Debug"},
+         {"debug", 'V', POPT_ARG_NONE, &debug, 0, "Debug"},
          POPT_AUTOHELP {}
 	      // *INDENT-ON*
       };
@@ -110,12 +111,88 @@ main (int argc, const char *argv[])
       poptFreeContext (optCon);
    }
 
-   SQL *sql = sql_real_connect (NULL, sqlhost, sqluser, sqlpass, sqldb, 0, NULL, 0, 1, sqlconfig);
+   SQL sql;
+   sql_real_connect (&sql, sqlhost, sqluser, sqlpass, sqldb, 0, NULL, 0, 1, sqlconfig);
+
+   void message (struct mosquitto *mqtt, void *obj, const struct mosquitto_message *msg)
+   {
+      obj = obj;
+      char *topic = msg->topic;
+      char *val = malloc (msg->payloadlen + 1);
+      if (!val)
+         errx (1, "malloc");
+      if (msg->payloadlen)
+         memcpy (val, msg->payload, msg->payloadlen);
+      val[msg->payloadlen] = 0;
+      char *v = val;
+      if (debug)
+         warnx ("Message %s %s", topic, val);
+      if (!strncmp (v, "{\"SerialReceived\":\"", 19))
+         v += 19;
+      if (!strncmp (v, "NET WEIGHT", 10))
+         v += 10;
+      while (*v == ' ')
+         v++;
+      char *e = v;
+      while (isdigit (*e) || *e == '.')
+         e++;
+      while (*e == ' ')
+         *e++ = 0;
+      double kg = 0;
+      if (!strncmp (e, "st", 2))
+      {                         // FFS
+         *e = 0;
+         e += 2;
+         double st = strtod (v, NULL);
+         while (*e == ' ')
+            e++;
+         v = e;
+         while (isdigit (*e) || *e == '.')
+            e++;
+         while (*e == ' ')
+            *e++ = 0;
+         if (!strncmp (e, "lb", 1))
+         {
+            *e = 0;
+            double lb = strtod (v, NULL);
+            lb += st * 14;
+            kg = lb / 2.2;
+         }
+      } else if (!strncmp (e, "lb", 2))
+      {                         // Arrg
+         *e = 0;
+         double lb = strtod (v, NULL);
+         kg = lb / 2.2;
+      } else
+      {
+         *e = 0;
+         kg = strtod (v, NULL);
+      }
+      if (kg)
+         sql_safe_query_free (&sql, sql_printf ("INSERT INTO `%S` SET `Topic`=%#s,kg=%.1lf", sqltable, topic, kg));
+      free (val);
+   }
 
    int e = mosquitto_lib_init ();
    if (e)
       errx (1, "MQTT init failed %s", mosquitto_strerror (e));
+   struct mosquitto *mqtt = mosquitto_new (mqttid, 1, NULL);
+   e = mosquitto_username_pw_set (mqtt, mqttuser, mqttpass);
+   if (e)
+      errx (1, "MQTT auth failed %s", mosquitto_strerror (e));
+   mosquitto_message_callback_set (mqtt, message);
+   e = mosquitto_connect (mqtt, mqtthost, 1883, 60);
+   if (e)
+      errx (1, "MQTT connect failed (%s) %s", mqtthost, mosquitto_strerror (e));
+   e = mosquitto_subscribe (mqtt, NULL, mqtttopic, 0);
+   if (e)
+      errx (1, "MQTT subscribe failed %s", mosquitto_strerror (e));
+   e = mosquitto_loop_forever (mqtt, 1000, 1);
+   if (e)
+      errx (1, "MQTT loop failed %s", mosquitto_strerror (e));
+   mosquitto_destroy (mqtt);
+   mosquitto_lib_cleanup ();
 
-   sql_close (sql);
+   sql_close (&sql);
    return 0;
 }
