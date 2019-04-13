@@ -1,0 +1,3 @@
+[submodule "SQLlib"]
+	path = SQLlib
+	url = https://github.com/revk/SQLlib
