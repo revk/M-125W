@@ -73,7 +73,7 @@ main (int argc, const char *argv[])
 #ifdef  MQTTTOPIC
    const char *mqtttopic = QUOTE (MQTTTOPIC);
 #else
-   const char *mqtttopic = "tele/#/RESULT";     // Tasmota Serial received logic
+   const char *mqtttopic = "tele/+/RESULT";     // Tasmota Serial received logic
 #endif
    {                            // POPT
       poptContext optCon;       // context for parsing command-line options
@@ -169,7 +169,25 @@ main (int argc, const char *argv[])
          kg = strtod (v, NULL);
       }
       if (kg)
-         sql_safe_query_free (&sql, sql_printf ("INSERT INTO `%S` SET `Topic`=%#s,kg=%.1lf", sqltable, topic, kg));
+      {
+         const char *a = mqtttopic;
+         char *b = topic;
+         while (*a && *a == *b && *a != '#' && *a != '+')
+         {
+            a++;
+            b++;
+         }
+         if (*a == '+')
+         {
+            b = strdupa (b);
+            char *e = b;
+            while (*e && *e != '/')
+               e++;
+            *e = 0;
+         } else if (*a != '#')
+            b = topic;
+         sql_safe_query_free (&sql, sql_printf ("INSERT INTO `%S` SET `Topic`=%#s,kg=%.1lf", sqltable, b, kg));
+      }
       free (val);
    }
 
