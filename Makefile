@@ -6,7 +6,7 @@ SQLVER=$(shell mysql_config --version | sed 'sx\..*xx')
 CCOPTS=${SQLINC} -I. -I/usr/local/ssl/include -D_GNU_SOURCE -g -Wall -funsigned-char -lm
 OPTS=-L/usr/local/ssl/lib ${SQLLIB} ${CCOPTS}
 
-all: git daikinac
+all: git mqttweigh
 
 SQLlib/sqllib.o: SQLlib/sqllib.c
 	make -C SQLlib
