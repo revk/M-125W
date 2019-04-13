@@ -116,6 +116,6 @@ main (int argc, const char *argv[])
    if (e)
       errx (1, "MQTT init failed %s", mosquitto_strerror (e));
 
-   sql_close (&sql);
+   sql_close (sql);
    return 0;
 }
