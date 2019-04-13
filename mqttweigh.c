@@ -75,6 +75,11 @@ main (int argc, const char *argv[])
 #else
    const char *mqtttopic = "tele/+/RESULT";     // Tasmota Serial received logic
 #endif
+#ifdef  NETWEIGHT
+   const char *prefix = QUOTE (NETWEIGHT);
+#else
+   const char *prefix = "NET WEIGHT";   // Marsden scales prefix this
+#endif
    {                            // POPT
       poptContext optCon;       // context for parsing command-line options
       const struct poptOption optionsTable[] = {
@@ -84,6 +89,7 @@ main (int argc, const char *argv[])
          {"mqtt-pass", 'P', POPT_ARG_STRING | (mqttpass ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &mqttpass, 0, "MQTT password", "Password"},
          {"mqtt-id", 0, POPT_ARG_STRING | (mqttid ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &mqttid, 0, "MQTT ID", "ID"},
          {"mqtt-topic", 't', POPT_ARG_STRING | (mqtttopic ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &mqtttopic, 0, "MQTT topic", "Topic"},
+         {"prefix", 0, POPT_ARG_STRING | (prefix ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &prefix, 0, "Weight prefix", "text"},
          {"sql-config", 'c', POPT_ARG_STRING | (sqlconfig ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &sqlconfig, 0, "MQTT config", "Filename"},
          {"sql-host", 's', POPT_ARG_STRING | (sqlhost ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &sqlhost, 0, "MQTT hostname", "Hostname"},
          {"sql-user", 0, POPT_ARG_STRING | (sqluser ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &sqluser, 0, "MQTT username", "Username"},
@@ -129,64 +135,66 @@ main (int argc, const char *argv[])
          warnx ("Message %s %s", topic, val);
       if (!strncmp (v, "{\"SerialReceived\":\"", 19))
          v += 19;
-      if (!strncmp (v, "NET WEIGHT", 10))
-         v += 10;
-      while (*v == ' ')
-         v++;
-      char *e = v;
-      while (isdigit (*e) || *e == '.')
-         e++;
-      while (*e == ' ')
-         *e++ = 0;
-      double kg = 0;
-      if (!strncmp (e, "st", 2))
-      {                         // FFS
-         *e = 0;
-         e += 2;
-         double st = strtod (v, NULL);
-         while (*e == ' ')
-            e++;
-         v = e;
+      if (!strncmp (v, prefix, strlen (prefix)))
+      {
+         v += strlen (prefix);
+         while (*v == ' ')
+            v++;
+         char *e = v;
          while (isdigit (*e) || *e == '.')
             e++;
          while (*e == ' ')
             *e++ = 0;
-         if (!strncmp (e, "lb", 1))
-         {
+         double kg = 0;
+         if (!strncmp (e, "st", 2))
+         {                      // FFS
+            *e = 0;
+            e += 2;
+            double st = strtod (v, NULL);
+            while (*e == ' ')
+               e++;
+            v = e;
+            while (isdigit (*e) || *e == '.')
+               e++;
+            while (*e == ' ')
+               *e++ = 0;
+            if (!strncmp (e, "lb", 1))
+            {
+               *e = 0;
+               double lb = strtod (v, NULL);
+               lb += st * 14;
+               kg = lb / 2.2;
+            }
+         } else if (!strncmp (e, "lb", 2))
+         {                      // Arrg
             *e = 0;
             double lb = strtod (v, NULL);
-            lb += st * 14;
             kg = lb / 2.2;
-         }
-      } else if (!strncmp (e, "lb", 2))
-      {                         // Arrg
-         *e = 0;
-         double lb = strtod (v, NULL);
-         kg = lb / 2.2;
-      } else
-      {
-         *e = 0;
-         kg = strtod (v, NULL);
-      }
-      if (kg)
-      {
-         const char *a = mqtttopic;
-         char *b = topic;
-         while (*a && *a == *b && *a != '#' && *a != '+')
+         } else
          {
-            a++;
-            b++;
-         }
-         if (*a == '+')
-         {
-            b = strdupa (b);
-            char *e = b;
-            while (*e && *e != '/')
-               e++;
             *e = 0;
-         } else if (*a != '#')
-            b = topic;
-         sql_safe_query_free (&sql, sql_printf ("INSERT INTO `%S` SET `Topic`=%#s,kg=%.1lf", sqltable, b, kg));
+            kg = strtod (v, NULL);
+         }
+         if (kg)
+         {
+            const char *a = mqtttopic;
+            char *b = topic;
+            while (*a && *a == *b && *a != '#' && *a != '+')
+            {
+               a++;
+               b++;
+            }
+            if (*a == '+')
+            {
+               b = strdupa (b);
+               char *e = b;
+               while (*e && *e != '/')
+                  e++;
+               *e = 0;
+            } else if (*a != '#')
+               b = topic;
+            sql_safe_query_free (&sql, sql_printf ("INSERT INTO `%S` SET `Topic`=%#s,kg=%.1lf", sqltable, b, kg));
+         }
       }
       free (val);
    }
