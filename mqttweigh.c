@@ -134,10 +134,11 @@ main (int argc, const char *argv[])
       if (debug)
          warnx ("Message %s %s", topic, val);
       if (!strncmp (v, "{\"SerialReceived\":\"", 19))
-         v += 19;
-      if (!prefix||!strncmp (v, prefix, strlen (prefix)))
+         v += 19;               // Allow for use with Tasmota serial bridge
+      if (!prefix || !strncmp (v, prefix, strlen (prefix)))
       {
-         if(prefix)v += strlen (prefix);
+         if (prefix)
+            v += strlen (prefix);
          while (*v == ' ')
             v++;
          char *e = v;
@@ -171,7 +172,7 @@ main (int argc, const char *argv[])
             double lb = strtod (v, NULL);
             kg = lb / 2.2;
          } else
-         {
+         {                      // Assume kg
             *e = 0;
             kg = strtod (v, NULL);
          }
