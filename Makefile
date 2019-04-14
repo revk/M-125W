@@ -12,7 +12,7 @@ SQLlib/sqllib.o: SQLlib/sqllib.c
 	make -C SQLlib
 
 mqttweigh: mqttweigh.c SQLlib/sqllib.o
-	cc -O -o $@ $< ${OPTS} -lpopt ${LIBMQTT} -ISQLlib SQLlib/sqllib.o -lcurl -DSQLLIB
+	cc -O -o $@ $< ${OPTS} -lpopt ${LIBMQTT} -ISQLlib SQLlib/sqllib.o -DSQLLIB
 
 git:
 	git submodule update --init
