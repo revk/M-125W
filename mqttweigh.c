@@ -28,7 +28,7 @@ main (int argc, const char *argv[])
 #ifdef  SQLHOST
    const char *sqlhost = QUOTE (SQLHOST);
 #else
-   const char *sqlhost = NULL;
+   const char *sqlhost = "localhost";
 #endif
 #ifdef  SQLUSER
    const char *sqluser = QUOTE (SQLUSER);
