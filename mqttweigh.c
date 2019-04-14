@@ -73,12 +73,12 @@ main (int argc, const char *argv[])
 #ifdef  MQTTTOPIC
    const char *mqtttopic = QUOTE (MQTTTOPIC);
 #else
-   const char *mqtttopic = "tele/+/RESULT";     // Tasmota Serial received logic
+   const char *mqtttopic = "stat/+/weight";     // From M-125W code in Marsden
 #endif
-#ifdef  NETWEIGHT
-   const char *prefix = QUOTE (NETWEIGHT);
+#ifdef  PREFIX
+   const char *prefix = QUOTE (PREFIX);
 #else
-   const char *prefix = "NET WEIGHT";   // Marsden scales prefix this
+   const char *prefix = NULL;
 #endif
    {                            // POPT
       poptContext optCon;       // context for parsing command-line options
@@ -135,9 +135,9 @@ main (int argc, const char *argv[])
          warnx ("Message %s %s", topic, val);
       if (!strncmp (v, "{\"SerialReceived\":\"", 19))
          v += 19;
-      if (!strncmp (v, prefix, strlen (prefix)))
+      if (!prefix||!strncmp (v, prefix, strlen (prefix)))
       {
-         v += strlen (prefix);
+         if(prefix)v += strlen (prefix);
          while (*v == ' ')
             v++;
          char *e = v;
