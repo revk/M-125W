@@ -28,7 +28,7 @@ main (int argc, const char *argv[])
 #ifdef  SQLHOST
    const char *sqlhost = QUOTE (SQLHOST);
 #else
-   const char *sqlhost = "localhost";
+   const char *sqlhost = NULL;
 #endif
 #ifdef  SQLUSER
    const char *sqluser = QUOTE (SQLUSER);
@@ -53,7 +53,7 @@ main (int argc, const char *argv[])
 #ifdef  MQTTHOST
    const char *mqtthost = QUOTE (MQTTHOST);
 #else
-   const char *mqtthost = NULL;
+   const char *mqtthost = "localhost";
 #endif
 #ifdef  MQTTUSER
    const char *mqttuser = QUOTE (MQTTUSER);
