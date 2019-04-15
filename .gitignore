@@ -3,3 +3,4 @@
 mqttweigh
 .DS_Store
 M-125W/*.bin
+M-125W/info.h

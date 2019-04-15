@@ -3,8 +3,9 @@
 
 #include "revk.h"
 
-void app_mqtt(const char *topic, char *message, size_t len)
+void app_mqtt(const char *prefix,const char*suffix, char *message, size_t len)
 {
+  
 }
 
 void app_setup()

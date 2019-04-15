@@ -12,6 +12,7 @@
 
 // There are a number of default / key settings which can be overridden in the info.h file
 //
+#include "revk.h"
 #include "info.h"
 
 #ifndef APP
@@ -23,11 +24,14 @@
 #ifndef MQTTHOST
 #define MQTTHOST        "mqtt.iot"
 #endif
+#ifndef MQTTPORT
+#define MQTTPORT        1883
+#endif
 #ifndef MQTTUSER
-#define MQTTHOST        ""
+#define MQTTUSER        NULL
 #endif
 #ifndef MQTTPASS
-#define MQTTPASS        ""
+#define MQTTPASS        NULL
 #endif
 #ifndef FIRMWARE
 #define FIRMWARE        "mqtt.iot"
@@ -47,20 +51,19 @@
 
 #include <ESP8266httpUpdate.h>
 #include <ESP8266WiFi.h>
-#include <Adafruit_MQTT.h>
-#include <Adafruit_MQTT_Client.h>
+#include <PubSubClient.h>
 
 WiFiClient mqttclient;
-Adafruit_MQTT_Client mqtt(&mqttclient, MQTTHOST, 1883);
-Adafruit_MQTT_Subscribe subupgrade = Adafruit_MQTT_Subscribe(&mqtt, "cmnd/" HOSTNAME "/upgrade");
-Adafruit_MQTT_Publish status = Adafruit_MQTT_Publish(&mqtt, "stat/" HOSTNAME "/status");
+PubSubClient mqtt(mqttclient);
 
 unsigned long mqttping = 0;
 unsigned long mqttretry = 0;
+unsigned long mqttbackoff = 100;
+char chipid[7];
 
 void upgrade(char *msg, uint16_t len)
 {
-  status.publish("Upgrade " __TIME__);
+  revk_pub("stat", "upgrade", "Upgrade " __TIME__);
   ESPhttpUpdate.rebootOnUpdate(true);
   WiFiClient client;
   ESPhttpUpdate.update(client, FIRMWARE, 80, "/" HOSTNAME ".ino." BOARD ".bin");
@@ -68,25 +71,28 @@ void upgrade(char *msg, uint16_t len)
 
 void setup()
 {
+  snprintf(chipid, sizeof(chipid), "%06X", ESP.getChipId());
   Serial.begin(9600);
   WiFi.hostname(HOSTNAME);
+  WiFi.mode(WIFI_STA);
   WiFi.begin(WIFISSID, WIFIPASS);
-  subupgrade.setCallback(upgrade);
-  mqtt.subscribe(&subupgrade);
+  mqtt.setServer(MQTTHOST, MQTTPORT);
   app_setup();
 }
 
 void loop()
 {
-  if (!mqtt.connected() && mqttretry < millis()) {
-    mqtt.disconnect();
-    if (!mqtt.connect())status.publish("Running " __TIME__);
-    mqttretry = millis() + 1000;
-  }
-  mqtt.processPackets(1);
-  if (mqttping < millis()) {
-    mqttping = millis() + 10000;
-    mqtt.ping();
+  // MQTT reconnnect
+  if (!mqtt.loop() && mqttretry < millis())
+  {
+    Serial.printf("MQTT connect %d %d %d\n",mqttretry,mqttbackoff,millis());
+    if (mqtt.connect(chipid, MQTTUSER, MQTTPASS))
+    { // Worked
+      revk_pub("stat", "boot", "Running " __TIME__ " %s", chipid);
+      mqttbackoff = 1000;
+    }
+    else if (mqttbackoff < 300000) mqttbackoff *= 2; // Failed, back off
+    mqttretry = millis() + mqttbackoff;
   }
   app_loop();
 }
@@ -97,5 +103,5 @@ void revk_pub(const char *prefix, const char *suffix, const char *fmt, ...)
   va_list ap;
   va_start(ap, fmt);
   vsnprintf(temp, sizeof(temp), fmt, ap);
-  status.publish(temp); // TODO
+  // TODO
 }
