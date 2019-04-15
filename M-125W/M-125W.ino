@@ -3,14 +3,18 @@
 
 #include "revk.h"
 
-void app_mqtt(const char *prefix,const char*suffix, char *message, size_t len)
+void app_mqtt(const char *prefix, const char*suffix, const byte *message, size_t len)
 {
-  
+  if (!suffix)return;
+  if (!strcmp(prefix, "cmnd") && !strcmp(suffix, "send"))
+  {
+    // TODO press SEND button
+  }
 }
 
 void app_setup()
 {
-
+  Serial.begin(9600); // Marsden talks at 9600 Baud
 }
 
 #define MAX_LINE 100

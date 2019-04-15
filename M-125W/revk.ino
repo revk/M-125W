@@ -4,11 +4,10 @@
 // TODO :-
 // This currently only sets hostname, ssid, etc from #define, to change to EEPROM
 // Add functions for app to set these and store in EEPROM and other settings
-// Add options for some Serial debug
+// Sort hostname and app topic logic more cleanly
 // Add fall back SSID
 // Add fall back MQTT
 // Add option for TLS MQTT
-// Changed to another MQTT library, and add subscribe, etc.
 
 // There are a number of default / key settings which can be overridden in the info.h file
 //
@@ -49,34 +48,60 @@
 #define BOARD "generic"
 #endif
 
-#include <ESP8266httpUpdate.h>
+#define DEBUG_ESP_HTTP_UPDATE
+#define DEBUG_ESP_PORT Serialx
+
 #include <ESP8266WiFi.h>
+#include <ESP8266httpUpdate.h>
 #include <PubSubClient.h>
 
 WiFiClient mqttclient;
 PubSubClient mqtt(mqttclient);
 
-unsigned long mqttping = 0;
-unsigned long mqttretry = 0;
-unsigned long mqttbackoff = 100;
-char chipid[7];
+static unsigned long mqttping = 0;
+static unsigned long mqttretry = 0;
+static unsigned long mqttbackoff = 100;
 
-void upgrade(char *msg, uint16_t len)
+char chipid[7] = "?"; // Hex chip ID as string
+
+static void upgrade(const byte *message, size_t len)
 {
   revk_pub("stat", "upgrade", "Upgrade " __TIME__);
-  ESPhttpUpdate.rebootOnUpdate(true);
   WiFiClient client;
-  ESPhttpUpdate.update(client, FIRMWARE, 80, "/" HOSTNAME ".ino." BOARD ".bin");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(client, FIRMWARE, 80, "/" APP ".ino." BOARD ".bin");
+  if (!ESPhttpUpdate.update(client, FIRMWARE, 80, "/" APP ".ino." BOARD ".bin"))
+  {
+    revk_pub("error", "upgrade", "%s", ESPhttpUpdate.getLastErrorString().c_str());
+    Serial.println(ESPhttpUpdate.getLastErrorString());
+  }
+}
+
+extern void app_mqtt(const char *prefix, const char*suffix, const byte *message, size_t len);
+void message(const char* topic, byte* payload, unsigned int len)
+{
+  char *p = strchr(topic, '/');
+  if (!p)return;
+  char *prefix = (char*)alloca(p - topic + 1);
+  strncpy(prefix, topic, p - topic);
+  prefix[p - topic] = 0;
+  p = strchr(p + 1, '/');
+  if (p)p++; else p = NULL;
+  if (!strcmp(prefix, "cmnd") && p && !strcmp(p, "upgrade"))
+  { // Do upgrade from web
+    upgrade(payload, len);
+    return; // Yeh, would not get here.
+  }
+  app_mqtt(prefix, p, payload, len);
 }
 
 void setup()
 {
   snprintf(chipid, sizeof(chipid), "%06X", ESP.getChipId());
-  Serial.begin(9600);
   WiFi.hostname(HOSTNAME);
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFISSID, WIFIPASS);
   mqtt.setServer(MQTTHOST, MQTTPORT);
+  mqtt.setCallback(message);
   app_setup();
 }
 
@@ -85,11 +110,15 @@ void loop()
   // MQTT reconnnect
   if (!mqtt.loop() && mqttretry < millis())
   {
-    Serial.printf("MQTT connect %d %d %d\n",mqttretry,mqttbackoff,millis());
     if (mqtt.connect(chipid, MQTTUSER, MQTTPASS))
     { // Worked
-      revk_pub("stat", "boot", "Running " __TIME__ " %s", chipid);
+      revk_pub("stat", "boot", "Running " __TIME__ );
       mqttbackoff = 1000;
+      char sub[101];
+      snprintf(sub, sizeof(sub), "+/" APP "-%s/#", chipid); // Specific device
+      mqtt.subscribe(sub);
+      mqtt.subscribe("+/" HOSTNAME "/#"); // The hostname
+      mqtt.subscribe("+/" APP "/#"); // General group topic
     }
     else if (mqttbackoff < 300000) mqttbackoff *= 2; // Failed, back off
     mqttretry = millis() + mqttbackoff;
@@ -103,5 +132,8 @@ void revk_pub(const char *prefix, const char *suffix, const char *fmt, ...)
   va_list ap;
   va_start(ap, fmt);
   vsnprintf(temp, sizeof(temp), fmt, ap);
-  // TODO
+  va_end(ap);
+  char topic[101];
+  snprintf(topic, sizeof(topic), "%s/" HOSTNAME "-%s/%s", prefix, chipid, suffix);
+  mqtt.publish(topic, temp);
 }
