@@ -7,3 +7,5 @@ Also included is Arduino/ESP8266 code tested on ESP-01 and ESP-12F. Sends to MQT
 The ESP can be inserted in to the scales and connected to GND, 3.3V and Serial.
 
 Press "SEND" on scales to send a weight.
+
+(c) 2019 Andrews & Arnold Ltd, Adrian Kennard. See LICENSE file (GPL).
