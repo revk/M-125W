@@ -1,3 +1,4 @@
 *~
 *.o
 mqttweigh
+.DS_Store
