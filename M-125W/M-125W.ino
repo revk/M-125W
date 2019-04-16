@@ -1,8 +1,6 @@
 // Marsden Scales
 // Reporting via MQTT
 
-#include <SPI.h>
-#include <MFRC522.h>
 #include <ESP8266RevK.h>
 #include <ESP8266HTTPClient.h>
 
@@ -26,6 +24,8 @@ const uint8_t fingerprint[20] = {0x5A, 0xCF, 0xFE, 0xF0, 0xF1, 0xA6, 0xF4, 0x5F,
 // GPIO16 SDA (SS)
 
 #ifdef USE_SPI
+#include <SPI.h>
+#include <MFRC522.h>
 MFRC522 rfid(16, 2); // Instance of the class
 #endif
 
@@ -53,12 +53,12 @@ void app_mqtt(const char *prefix, const char*suffix, const byte *message, size_t
 void setup()
 {
   Serial.begin(9600); // Marsden talks at 9600 Baud
+  digitalWrite(SEND, HIGH);
+  pinMode(SEND, OUTPUT);
 #ifdef USE_SPI
   SPI.begin(); // Init SPI bus
   rfid.PCD_Init(); // Init MFRC522
 #endif
-  digitalWrite(SEND, HIGH);
-  pinMode(SEND, OUTPUT);
 }
 
 #define MAX_LINE 100
