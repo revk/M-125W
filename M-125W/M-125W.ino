@@ -1,7 +1,7 @@
 // Marsden Scales
 // Reporting via MQTT
 
-#include "info.h"
+
 #include <ESP8266RevK.h>
 
 void app_wrap(char*topic, uint8_t*message, unsigned int len);
