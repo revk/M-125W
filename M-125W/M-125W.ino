@@ -32,21 +32,22 @@ MFRC522 rfid(16, 2); // Instance of the class
 void pressend();
 void app_wrap(char*topic, uint8_t*message, unsigned int len);
 void app_mqtt(const char *prefix, const char*suffix, const byte *message, size_t len);
-ESP8266RevK revk("M-125W", app_wrap, app_mqtt);
+ESP8266RevK revk("M-125W");
 
-void app_wrap(char*topic, uint8_t*message, unsigned int len)
-{
-  revk.message(topic, message, len);
+void app_setting(const char *setting,const char *value)
+{ // Called for settings retrieved from EEPROM
 }
 
 void app_mqtt(const char *prefix, const char*suffix, const byte *message, size_t len)
-{
+{ // Called for incoming MQTT messages
   if (!suffix)return;
   if (strcmp(prefix, "cmnd"))return;
   if (!strcmp(suffix, "send"))
   {
     presssend();
-  } else revk.pub("error", suffix, "Unknown command");
+    return;
+  }
+  revk.pub("error", suffix, "Unknown command");
 }
 
 void setup()
