@@ -32,7 +32,7 @@ MFRC522 rfid(16, 2); // Instance of the class
 void pressend();
 void app_wrap(char*topic, uint8_t*message, unsigned int len);
 void app_mqtt(const char *prefix, const char*suffix, const byte *message, size_t len);
-ESP8266RevK revk("M-125W");
+ESP8266RevK revk(__FILE__);
 
 boolean app_setting(const char *setting,const char *value)
 { // Called for settings retrieved from EEPROM
