@@ -34,20 +34,19 @@ void app_wrap(char*topic, uint8_t*message, unsigned int len);
 void app_mqtt(const char *prefix, const char*suffix, const byte *message, size_t len);
 ESP8266RevK revk("M-125W");
 
-void app_setting(const char *setting,const char *value)
+boolean app_setting(const char *setting,const char *value)
 { // Called for settings retrieved from EEPROM
+  return false; // Unknown setting
 }
 
-void app_mqtt(const char *prefix, const char*suffix, const byte *message, size_t len)
+boolean app_cmnd(const char*suffix, const byte *message, size_t len)
 { // Called for incoming MQTT messages
-  if (!suffix)return;
-  if (strcmp(prefix, "cmnd"))return;
   if (!strcmp(suffix, "send"))
   {
     presssend();
-    return;
+    return true;
   }
-  revk.pub("error", suffix, "Unknown command");
+  return false;
 }
 
 void setup()
