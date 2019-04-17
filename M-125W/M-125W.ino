@@ -1,6 +1,8 @@
 // Marsden Scales
 // Reporting via MQTT
 
+#define MYDEBUG
+
 #include <ESP8266RevK.h>
 #include <ESP8266HTTPClient.h>
 
@@ -34,7 +36,7 @@ void app_wrap(char*topic, uint8_t*message, unsigned int len);
 void app_mqtt(const char *prefix, const char*suffix, const byte *message, size_t len);
 ESP8266RevK revk(__FILE__);
 
-boolean app_setting(const char *setting,const char *value)
+boolean app_setting(const char *setting, const byte *value, size_t len)
 { // Called for settings retrieved from EEPROM
   return false; // Unknown setting
 }
@@ -51,9 +53,14 @@ boolean app_cmnd(const char*suffix, const byte *message, size_t len)
 
 void setup()
 {
+#ifdef MYDEBUG
+  rst_info *myResetInfo = ESP.getResetInfoPtr();
+  Serial.printf("App started %s (%d)\n", ESP.getResetReason().c_str(), myResetInfo->reason);
+#else
   Serial.begin(9600); // Marsden talks at 9600 Baud
   digitalWrite(SEND, HIGH);
   pinMode(SEND, OUTPUT);
+#endif
 #ifdef USE_SPI
   SPI.begin(); // Init SPI bus
   rfid.PCD_Init(); // Init MFRC522
@@ -71,7 +78,11 @@ unsigned long sendbutton = 0;
 void presssend()
 {
   sendbutton = millis() + 250;
+#ifdef MYDEBUG
+  Serial.println("Send low");
+#else
   digitalWrite(SEND, LOW);
+#endif
 }
 
 void report(byte *id, char *weight)
@@ -107,7 +118,11 @@ void loop()
   if (sendbutton && sendbutton < millis())
   { // Send button done
     sendbutton = 0;
+#ifdef MYDEBUG
+    Serial.println("Send high");
+#else
     digitalWrite(SEND, HIGH);
+#endif
   }
   if (carddone && carddone < millis())
   { // Card read timed out
