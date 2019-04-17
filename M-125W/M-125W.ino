@@ -1,7 +1,7 @@
 // Marsden Scales
 // Reporting via MQTT
 
-#define MYDEBUG
+//#define MYDEBUG
 
 #include <ESP8266RevK.h>
 #include <ESP8266HTTPClient.h>
@@ -43,7 +43,7 @@ boolean app_setting(const char *setting, const byte *value, size_t len)
 
 boolean app_cmnd(const char*suffix, const byte *message, size_t len)
 { // Called for incoming MQTT messages
-  if (!strcmp(suffix, "send"))
+  if (!strcasecmp(suffix, "send"))
   {
     presssend();
     return true;
@@ -59,7 +59,7 @@ void setup()
 #else
   Serial.begin(9600); // Marsden talks at 9600 Baud
   digitalWrite(SEND, HIGH);
-  pinMode(SEND, OUTPUT);
+  pinMode(SEND, INPUT);
 #endif
 #ifdef USE_SPI
   SPI.begin(); // Init SPI bus
@@ -82,6 +82,7 @@ void presssend()
   Serial.println("Send low");
 #else
   digitalWrite(SEND, LOW);
+  pinMode(SEND, OUTPUT);
 #endif
 }
 
@@ -121,6 +122,7 @@ void loop()
 #ifdef MYDEBUG
     Serial.println("Send high");
 #else
+    pinMode(SEND, INPUT);
     digitalWrite(SEND, HIGH);
 #endif
   }
@@ -129,7 +131,7 @@ void loop()
     report(cardid, NULL);
     carddone = 0;
   }
-  if (Serial.available() > 0) {
+  while (Serial.available() > 0) {
     char c = Serial.read();
     if (c >= ' ')
     {
@@ -159,7 +161,7 @@ void loop()
       presssend();
       MFRC522::PICC_Type piccType = rfid.PICC_GetType(rfid.uid.sak);
       memcpy(cardid, rfid.uid.uidByte, 4);
-      carddone = millis() + 5000;
+      carddone = millis() + 10000;
     }
   }
 #endif
