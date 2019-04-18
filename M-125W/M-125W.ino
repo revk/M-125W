@@ -15,7 +15,6 @@ ESP8266RevK revk(__FILE__, "Build: " __DATE__ " " __TIME__);
 // My settings
 char cloudhost[129] = "weigh.me.uk";
 char cloudpass[33] = "test";
-byte cloudtls[20] = {0xA9, 0x4F, 0x79, 0xCE, 0x80, 0xD7, 0xA2, 0x88, 0x84, 0xFE, 0x62, 0xF6, 0xCC, 0xD8, 0x49, 0xCA, 0x0E, 0xBA, 0xC1, 0x9C};
 
 #define SEND  1 // Send button
 #define RST 2 // SPI
@@ -47,7 +46,7 @@ boolean app_setting(const char *setting, const byte *value, size_t len)
   } else if (!strcasecmp(setting, "cloudpass") && len < sizeof(cloudpass)) {
     memcpy(cloudpass, value, len);
     cloudpass[len] = 0;
-  } else if (!strcasecmp(setting, "cloudtls") && len == sizeof(cloudtls))memcpy(cloudtls, value, len); // Exact length required
+  }
   else
     return false; // Unknown setting
   return true; // Done
@@ -115,8 +114,7 @@ void report(byte *id, char *weight)
   url[p] = 0;
   for (p = 0; url[p]; p++)if (url[p] == ' ')url[p] = '+';
   // Note, always https
-  WiFiClientSecure client;
-  client.setFingerprint(cloudtls);
+  WiFiClientSecure client=revk.leclient();
   HTTPClient https;
   if (https.begin(client, url)) {
     int ret = https.GET();
