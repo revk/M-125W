@@ -46,9 +46,6 @@ MFRC522 rfid(16, 2); // Instance of the class
 #endif
 
 void pressend();
-void app_wrap(char*topic, uint8_t*message, unsigned int len);
-void app_mqtt(const char *prefix, const char*suffix, const byte *message, size_t len);
-
 
 boolean app_setting(const char *setting, const byte *value, size_t len)
 { // Called for settings retrieved from EEPROM
@@ -126,14 +123,14 @@ void report(byte *id, char *weight)
   url[p] = 0;
   for (p = 0; url[p]; p++)if (url[p] == ' ')url[p] = '+';
   // Note, always https
-  WiFiClientSecure client=revk.leclient();
+  WiFiClientSecure client = revk.leclient();
   HTTPClient https;
   if (https.begin(client, url)) {
     int ret = https.GET();
     https.end();
     if (ret == 426)revk.ota(); // Upgrade required: New firmware required
     if (ret / 100 != 2)
-      revk.error("https", "HTTP failed %d", ret);
+      revk.error("https", "Failed %d from %s", ret, cloudhost);
   } else revk.error("https", "Failed");
 }
 
@@ -183,7 +180,7 @@ void loop()
   static long cardcheck = 0;
   if ((int)(cardcheck - millis()) < 0)
   {
-    cardcheck = millis() + 100;
+    cardcheck = millis() + 10;
     if (rfid.PICC_IsNewCardPresent())
     {
       if (rfid.PICC_ReadCardSerial())
