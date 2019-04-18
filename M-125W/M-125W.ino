@@ -5,7 +5,8 @@
 
 #include <ESP8266RevK.h>
 #include <ESP8266HTTPClient.h>
-#include <Hash.h>
+
+ESP8266RevK revk(__FILE__, "Build: " __DATE__ " " __TIME__);
 
 #ifdef ARDUINO_ESP8266_NODEMCU
 #define USE_SPI
@@ -36,7 +37,7 @@ MFRC522 rfid(16, 2); // Instance of the class
 void pressend();
 void app_wrap(char*topic, uint8_t*message, unsigned int len);
 void app_mqtt(const char *prefix, const char*suffix, const byte *message, size_t len);
-ESP8266RevK revk(__FILE__);
+
 
 boolean app_setting(const char *setting, const byte *value, size_t len)
 { // Called for settings retrieved from EEPROM
@@ -96,35 +97,33 @@ void presssend()
 
 void report(byte *id, char *weight)
 {
-  char url[200];
-  // TODO password hash
-  // TODO fix https
-  // TODO tidy the way we make the URL
-  if (id && weight)
-  {
+  if (weight && id)
     revk.pub("stat", "idweight", "%02X%02X%02X%02X %s", id[0], id[1], id[2], id[3], weight);
-    snprintf(url, sizeof(url), "http://%s/weighin.cgi?scales=%06X&id=%02X%02X%02X%02X&weight=%s", cloudhost, ESP.getChipId(),  id[0], id[1], id[2], id[3], weight);
-  }
-  else if (id)
-  {
-    revk.pub("stat", "id", "%02X%02X%02X%02X", id[0], id[1], id[2], id[3]);
-    snprintf(url, sizeof(url), "http://%s/weighin.cgi?scales=%06X&id=%02X%02X%02X%02X", cloudhost, ESP.getChipId(), id[0], id[1], id[2], id[3]);
-  }
   else if (weight)
-  {
     revk.pub("stat", "weight", "%s", weight);
-    snprintf(url, sizeof(url), "http://%s/weighin.cgi?scales=%06X&weight=%s", cloudhost, ESP.getChipId(), weight);
-  }
-  //WiFiClient      client;
-  //std::unique_ptr<BearSSL::WiFiClientSecure>client(new BearSSL::WiFiClientSecure);
+  else if (id)
+    revk.pub("stat", "id", "%02X%02X%02X%02X", id[0], id[1], id[2], id[3]);
+  if (!*cloudhost)return;
+  // Post
+  char url[500];
+  int m = sizeof(url) - 1, p = 0;
+  if (p < m)p += snprintf(url + p, m - p, "https://%s/weighin.cgi?version=%s", cloudhost, __DATE__ " " __TIME__);
+  if (p < m)p += snprintf(url + p, m - p, "&scales=%06X", ESP.getChipId());
+  if (p < m && cloudpass)p += snprintf(url + p, m - p, "&auth=%s", cloudpass); // Assume no special characters
+  if (p < m && weight)p += snprintf(url + p, m - p, "&weight=%s", weight);
+  if (p < m && id)p += snprintf(url + p, m - p, "&id=%02X%02X%02X%02X", id[0], id[1], id[2], id[3]);
+  url[p] = 0;
+  for (p = 0; url[p]; p++)if (url[p] == ' ')url[p] = '+';
+  // Note, always https
   WiFiClientSecure client;
   client.setFingerprint(cloudtls);
   HTTPClient https;
   if (https.begin(client, url)) {
     int ret = https.GET();
     https.end();
+    if (ret == 426)revk.ota(); // Upgrade required: New firmware required
     if (ret / 100 != 2)
-      revk.error("https", "Code %d", ret);
+      revk.error("https", "HTTP failed %d", ret);
   } else revk.error("https", "Failed");
 }
 
