@@ -22,6 +22,7 @@
 
 #include <ESP8266RevK.h>
 #include <ESP8266HTTPClient.h>
+#include <ESP8266TrueRandom.h>
 
 ESP8266RevK revk(__FILE__, "Build: " __DATE__ " " __TIME__);
 
@@ -31,7 +32,7 @@ ESP8266RevK revk(__FILE__, "Build: " __DATE__ " " __TIME__);
 
 // My settings
 char cloudhost[129] = "weigh.me.uk";
-char cloudpass[33] = "test";
+char cloudpass[33] = "";
 
 #define SEND  1 // Send button (TX pin)
 #define RST 2 // SPI
@@ -101,19 +102,26 @@ void presssend()
 #endif
 }
 
-void report(byte *id, char *weight)
+int report(byte *id, char *weight)
 {
+  if (!*cloudpass)
+  { // We need a password - make one - store in flash - so we use same every time
+    int i;
+    for (i = 0; i < sizeof(cloudpass) - 1; i++)cloudpass[i] = 'A' + ESP8266TrueRandom.random(26);
+    cloudpass[i] = 0; // End
+    revk.setting("cloudpass", cloudpass); // save
+  }
   if (weight && id)
     revk.pub("stat", "idweight", "%02X%02X%02X%02X %s", id[0], id[1], id[2], id[3], weight);
   else if (weight)
     revk.pub("stat", "weight", "%s", weight);
   else if (id)
     revk.pub("stat", "id", "%02X%02X%02X%02X", id[0], id[1], id[2], id[3]);
-  if (!*cloudhost)return;
+  if (!*cloudhost)return 404;
   // Post
   char url[500];
   int m = sizeof(url) - 1, p = 0;
-  if (p < m)p += snprintf(url + p, m - p, "https://%s/weighin.cgi?version=%s", cloudhost, __DATE__ " " __TIME__);
+  if (p < m)p += snprintf(url + p, m - p, "/weighin.cgi?version=%s", __DATE__ " " __TIME__);
   if (p < m)p += snprintf(url + p, m - p, "&scales=%06X", ESP.getChipId());
   if (p < m && cloudpass)p += snprintf(url + p, m - p, "&auth=%s", cloudpass); // Assume no special characters
   if (p < m && weight)p += snprintf(url + p, m - p, "&weight=%s", weight);
@@ -122,63 +130,58 @@ void report(byte *id, char *weight)
   for (p = 0; url[p]; p++)if (url[p] == ' ')url[p] = '+';
   // Note, always https
   WiFiClientSecure client = revk.leclient();
+  //client.setInsecure();
   HTTPClient https;
-  if (https.begin(client, url)) {
-    int ret = https.GET();
-    https.end();
-    if (ret == 426)revk.ota(); // Upgrade required: New firmware required
-    if (ret / 100 != 2)
-      revk.error("https", "Failed %d from %s", ret, cloudhost);
-  } else revk.error("https", "Failed");
+  https.begin(client, cloudhost, 443, url, true);
+  int ret = https.GET();
+  https.end();
+  if (ret == HTTP_CODE_UPGRADE_REQUIRED)revk.ota(); // Upgrade required: New firmware required
+  if (ret > 0 && ret != HTTP_CODE_OK && ret != HTTP_CODE_NO_CONTENT)
+    revk.error("https", "Failed %d from %s", ret, cloudhost);
+  else if (ret < 0)
+  {
+    char err[100];
+    client.getLastSSLError(err, sizeof(err));
+    revk.error("https", "Failed %s: %s from %s", https.errorToString(ret).c_str(), err,  cloudhost);
+  }
+  return ret;
 }
 
 void loop()
 {
   revk.loop();
-  if (sendbutton && (int) (sendbutton - millis()) < 0)
-  { // Send button done
-    sendbutton = 0;
-#ifdef REVKDEBUG
-    Serial.println("Send high");
-#else
-    pinMode(SEND, INPUT);
-    digitalWrite(SEND, HIGH);
-#endif
-  }
+  long now = millis();
   static long carddone = 0;
   static byte cardid[4] = {};
-  if (carddone && (int)(carddone - millis()) < 0)
+  if (carddone && (int)(carddone - now) < 0)
   { // Card read timed out
     report(cardid, NULL);
     carddone = 0;
   }
-  while (Serial.available() > 0) {
+  while (Serial.available() > 0)
+  { // Get serial
     char c = Serial.read();
     if (c >= ' ')
-    {
+    { // line
       if (linep < MAX_LINE)line[linep++] = c;
-    } else
+    } else if (linep)
     { // end of line
       line[linep] = 0;
-      if (linep)
-      {
-        if (!strncmp(line, "NET WEIGHT", 10))
-        {
-          char *p = line + 10;
-          while (*p == ' ')p++;
-          if (carddone)report(cardid, p);
-          else report(NULL, p);
-          carddone = 0;
-        }
+      linep = 0; // new line
+      if (!strncmp(line, "NET WEIGHT", 10))
+      { // Time to send
+        char *p = line + 10;
+        while (*p == ' ')p++;
+        if (carddone)report(cardid, p);
+        else report(NULL, p);
       }
-      linep = 0;
     }
   }
 #ifdef USE_SPI
   static long cardcheck = 0;
-  if ((int)(cardcheck - millis()) < 0)
+  if ((int)(cardcheck - now) < 0)
   {
-    cardcheck = millis() + 10;
+    cardcheck = now + 10;
     if (rfid.PICC_IsNewCardPresent())
     {
       if (rfid.PICC_ReadCardSerial())
@@ -186,7 +189,7 @@ void loop()
         presssend();
         MFRC522::PICC_Type piccType = rfid.PICC_GetType(rfid.uid.sak);
         memcpy(cardid, rfid.uid.uidByte, 4);
-        if (!(carddone = millis() + 10000))carddone++;
+        if (!(carddone = now + 10000))carddone++;
       }
     }
   }
