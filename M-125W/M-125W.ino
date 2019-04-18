@@ -151,6 +151,16 @@ void loop()
 {
   revk.loop();
   long now = millis();
+  if (sendbutton && (int) (sendbutton - now) < 0)
+  { // Send button done
+    sendbutton = 0;
+#ifdef REVKDEBUG
+    Serial.println("Send high");
+#else
+    pinMode(SEND, INPUT);
+    digitalWrite(SEND, HIGH);
+#endif
+  }
   static long carddone = 0;
   static byte cardid[4] = {};
   if (carddone && (int)(carddone - now) < 0)
