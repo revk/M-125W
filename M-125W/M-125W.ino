@@ -174,6 +174,7 @@ void loop()
         while (*p == ' ')p++;
         if (carddone)report(cardid, p);
         else report(NULL, p);
+        carddone = 0;
       }
     }
   }
