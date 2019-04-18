@@ -5,14 +5,16 @@
 
 #include <ESP8266RevK.h>
 #include <ESP8266HTTPClient.h>
+#include <Hash.h>
 
 #ifdef ARDUINO_ESP8266_NODEMCU
 #define USE_SPI
 #endif
 
-#define CLOUD "weigh.me.uk"
-// TODO https
-const uint8_t fingerprint[20] = {0x5A, 0xCF, 0xFE, 0xF0, 0xF1, 0xA6, 0xF4, 0x5F, 0xD2, 0x11, 0x11, 0xC6, 0x1D, 0x2F, 0x0E, 0xBC, 0x39, 0x8D, 0x50, 0xE0};
+// My settings
+char cloudhost[129] = "weigh.me.uk";
+char cloudpass[33] = "test";
+byte cloudtls[20] = {0xA9, 0x4F, 0x79, 0xCE, 0x80, 0xD7, 0xA2, 0x88, 0x84, 0xFE, 0x62, 0xF6, 0xCC, 0xD8, 0x49, 0xCA, 0x0E, 0xBA, 0xC1, 0x9C};
 
 #define SEND  1 // Send button
 #define RST 2 // SPI
@@ -38,7 +40,16 @@ ESP8266RevK revk(__FILE__);
 
 boolean app_setting(const char *setting, const byte *value, size_t len)
 { // Called for settings retrieved from EEPROM
-  return false; // Unknown setting
+  if (!strcasecmp(setting, "cloudhost") && len < sizeof(cloudhost)) {
+    memcpy(cloudhost, value, len);
+    cloudhost[len] = 0;
+  } else if (!strcasecmp(setting, "cloudpass") && len < sizeof(cloudpass)) {
+    memcpy(cloudpass, value, len);
+    cloudpass[len] = 0;
+  } else if (!strcasecmp(setting, "cloudtls") && len == sizeof(cloudtls))memcpy(cloudtls, value, len); // Exact length required
+  else
+    return false; // Unknown setting
+  return true; // Done
 }
 
 boolean app_cmnd(const char*suffix, const byte *message, size_t len)
@@ -71,13 +82,10 @@ void setup()
 char line[MAX_LINE + 1];
 int linep = 0;
 
-unsigned long carddone = 0;
-byte cardid[4] = {};
-
-unsigned long sendbutton = 0;
+unsigned sendbutton = 0; // Signed to allow for wrap
 void presssend()
 {
-  sendbutton = millis() + 250;
+  if (!(sendbutton = millis() + 250))sendbutton++; // Dont allow 0 to happen
 #ifdef MYDEBUG
   Serial.println("Send low");
 #else
@@ -89,34 +97,41 @@ void presssend()
 void report(byte *id, char *weight)
 {
   char url[200];
-  // TODO for testing - needs proper authentication adding!
-  // TODO HTTPS
+  // TODO password hash
+  // TODO fix https
+  // TODO tidy the way we make the URL
   if (id && weight)
   {
     revk.pub("stat", "idweight", "%02X%02X%02X%02X %s", id[0], id[1], id[2], id[3], weight);
-    snprintf(url, sizeof(url), "http://%s/weighin.cgi?scales=%06X&id=%02X%02X%02X%02X&weight=%s", CLOUD, ESP.getChipId(),  id[0], id[1], id[2], id[3], weight);
+    snprintf(url, sizeof(url), "http://%s/weighin.cgi?scales=%06X&id=%02X%02X%02X%02X&weight=%s", cloudhost, ESP.getChipId(),  id[0], id[1], id[2], id[3], weight);
   }
   else if (id)
   {
     revk.pub("stat", "id", "%02X%02X%02X%02X", id[0], id[1], id[2], id[3]);
-    snprintf(url, sizeof(url), "http://%s/weighin.cgi?scales=%06X&id=%02X%02X%02X%02X", CLOUD, ESP.getChipId(), id[0], id[1], id[2], id[3]);
+    snprintf(url, sizeof(url), "http://%s/weighin.cgi?scales=%06X&id=%02X%02X%02X%02X", cloudhost, ESP.getChipId(), id[0], id[1], id[2], id[3]);
   }
   else if (weight)
   {
     revk.pub("stat", "weight", "%s", weight);
-    snprintf(url, sizeof(url), "http://%s/weighin.cgi?scales=%06X&weight=%s", CLOUD, ESP.getChipId(), weight);
+    snprintf(url, sizeof(url), "http://%s/weighin.cgi?scales=%06X&weight=%s", cloudhost, ESP.getChipId(), weight);
   }
-  WiFiClient      client;
-  HTTPClient http;
-  http.begin(client, url);
-  http.GET();
-  http.end();
+  //WiFiClient      client;
+  //std::unique_ptr<BearSSL::WiFiClientSecure>client(new BearSSL::WiFiClientSecure);
+  WiFiClientSecure client;
+  client.setFingerprint(cloudtls);
+  HTTPClient https;
+  if (https.begin(client, url)) {
+    int ret = https.GET();
+    https.end();
+    if (ret / 100 != 2)
+      revk.error("https", "Code %d", ret);
+  } else revk.error("https", "Failed");
 }
 
 void loop()
 {
   revk.loop();
-  if (sendbutton && sendbutton < millis())
+  if (sendbutton && (sendbutton - millis()) < 0)
   { // Send button done
     sendbutton = 0;
 #ifdef MYDEBUG
@@ -126,7 +141,9 @@ void loop()
     digitalWrite(SEND, HIGH);
 #endif
   }
-  if (carddone && carddone < millis())
+  static long carddone = 0;
+  static byte cardid[4] = {};
+  if (carddone && (carddone - millis()) < 0)
   { // Card read timed out
     report(cardid, NULL);
     carddone = 0;
@@ -154,14 +171,18 @@ void loop()
     }
   }
 #ifdef USE_SPI
-  if (rfid.PICC_IsNewCardPresent())
-  {
-    if (rfid.PICC_ReadCardSerial())
+  static long cardcheck = 0;
+  if ((cardcheck - millis()) < 0)
+  { cardcheck = millis() + 100;
+    if (rfid.PICC_IsNewCardPresent())
     {
-      presssend();
-      MFRC522::PICC_Type piccType = rfid.PICC_GetType(rfid.uid.sak);
-      memcpy(cardid, rfid.uid.uidByte, 4);
-      carddone = millis() + 10000;
+      if (rfid.PICC_ReadCardSerial())
+      {
+        presssend();
+        MFRC522::PICC_Type piccType = rfid.PICC_GetType(rfid.uid.sak);
+        memcpy(cardid, rfid.uid.uidByte, 4);
+        if (!(carddone = millis() + 10000))carddone++;
+      }
     }
   }
 #endif
