@@ -20,8 +20,6 @@
 // GPIO14 SCK (CLK)
 // GPIO16 SDA (SS)
 
-#define REVKDEBUG
-
 #include <ESP8266RevK.h>
 #include <ESP8266HTTPClient.h>
 
