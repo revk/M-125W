@@ -130,7 +130,7 @@ void report(byte *id, char *weight)
 void loop()
 {
   revk.loop();
-  if (sendbutton && (sendbutton - millis()) < 0)
+  if (sendbutton && (int) (sendbutton - millis()) < 0)
   { // Send button done
     sendbutton = 0;
 #ifdef MYDEBUG
@@ -142,7 +142,7 @@ void loop()
   }
   static long carddone = 0;
   static byte cardid[4] = {};
-  if (carddone && (carddone - millis()) < 0)
+  if (carddone && (int)(carddone - millis()) < 0)
   { // Card read timed out
     report(cardid, NULL);
     carddone = 0;
@@ -171,8 +171,9 @@ void loop()
   }
 #ifdef USE_SPI
   static long cardcheck = 0;
-  if ((cardcheck - millis()) < 0)
-  { cardcheck = millis() + 100;
+  if ((int)(cardcheck - millis()) < 0)
+  {
+    cardcheck = millis() + 100;
     if (rfid.PICC_IsNewCardPresent())
     {
       if (rfid.PICC_ReadCardSerial())
