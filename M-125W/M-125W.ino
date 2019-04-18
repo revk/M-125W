@@ -1,5 +1,24 @@
 // Marsden Scales
-// Reporting via MQTT
+// ESP-01 based for simple reporting of weight on SEND button
+// Option to force send using cmnd/app/host/send
+// ESP-12F based for use with MFRC522 to send on card read
+// Reporting via MQTT (note, this expected to be local and so non TLS)
+// Reporting via https to a server (CA by Let's Encrypt)
+//
+
+// Wiring (recommend a 4 pin header, see https://youtu.be/l1VAymhwtVM for details)
+// GND/3V3 to GND/VDD pads in middle (non display side of PCB)
+// RX to ping 4 of SO8 labelled U2 (display side of PCB)
+// TX via diode, low side to ESP, to SEND switch the non grounded side (display side of PCB)
+
+// Witing for ESP-12F
+// As above to the M-125
+// RC522 connnections (in addition to GND/3V3)
+// GPIO2  RST
+// GPIO13 MOSI
+// GPIO12 MISO
+// GPIO14 SCK (CLK)
+// GPIO16 SDA (SS)
 
 //#define MYDEBUG
 
@@ -16,16 +35,9 @@ ESP8266RevK revk(__FILE__, "Build: " __DATE__ " " __TIME__);
 char cloudhost[129] = "weigh.me.uk";
 char cloudpass[33] = "test";
 
-#define SEND  1 // Send button
+#define SEND  1 // Send button (TX pin)
 #define RST 2 // SPI
 #define SS 16 // SPI
-
-// RC522 connnections
-// GPIO2  RST
-// GPIO13 MOSI
-// GPIO12 MISO
-// GPIO14 SCK (CLK)
-// GPIO16 SDA (SS)
 
 #ifdef USE_SPI
 #include <SPI.h>
