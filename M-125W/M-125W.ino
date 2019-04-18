@@ -20,7 +20,7 @@
 // GPIO14 SCK (CLK)
 // GPIO16 SDA (SS)
 
-//#define MYDEBUG
+#define REVKDEBUG
 
 #include <ESP8266RevK.h>
 #include <ESP8266HTTPClient.h>
@@ -73,7 +73,7 @@ boolean app_cmnd(const char*suffix, const byte *message, size_t len)
 
 void setup()
 {
-#ifdef MYDEBUG
+#ifdef REVKDEBUG
   rst_info *myResetInfo = ESP.getResetInfoPtr();
   Serial.printf("App started %s (%d)\n", ESP.getResetReason().c_str(), myResetInfo->reason);
 #else
@@ -95,7 +95,7 @@ unsigned sendbutton = 0; // Signed to allow for wrap
 void presssend()
 {
   if (!(sendbutton = millis() + 250))sendbutton++; // Dont allow 0 to happen
-#ifdef MYDEBUG
+#ifdef REVKDEBUG
   Serial.println("Send low");
 #else
   digitalWrite(SEND, LOW);
@@ -140,7 +140,7 @@ void loop()
   if (sendbutton && (int) (sendbutton - millis()) < 0)
   { // Send button done
     sendbutton = 0;
-#ifdef MYDEBUG
+#ifdef REVKDEBUG
     Serial.println("Send high");
 #else
     pinMode(SEND, INPUT);
