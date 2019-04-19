@@ -20,6 +20,10 @@
 // GPIO14 SCK (CLK)
 // GPIO16 SDA (SS)
 
+
+#define SENDRETRY 1000  // Re-press send if no weight yet
+#define CARDWAIT 20000  // Wait for weight after getting card
+
 #include <ESP8266RevK.h>
 #include <ESP8266HTTPClient.h>
 #include <ESP8266TrueRandom.h>
@@ -161,8 +165,6 @@ void loop()
     digitalWrite(SEND, HIGH);
 #endif
   }
-#define SENDRETRY 1000  // Re-press send if no weight yet
-#define CARDWAIT 10000  // Wait for weight after gettign card
   static long sendretry = 0;
   static long carddone = 0;
   static byte cardid[4] = {};
@@ -191,10 +193,13 @@ void loop()
       { // Time to send
         char *p = line + 10;
         while (*p == ' ')p++;
-        if (carddone)report(cardid, p);
-        else report(NULL, p);
-        carddone = 0;
-        sendretry = 0;
+        if (*p != '0')
+        { // Expect some weight - i.e. >=1 kg >=1 stone >=1 lb
+          if (carddone)report(cardid, p);
+          else report(NULL, p);
+          carddone = 0;
+          sendretry = 0;
+        }
       }
     }
   }
