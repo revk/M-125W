@@ -161,6 +161,8 @@ void loop()
     digitalWrite(SEND, HIGH);
 #endif
   }
+#define SENDRETRY 1000  // Re-press send if no weight yet
+#define CARDWAIT 10000  // Wait for weight after gettign card
   static long sendretry = 0;
   static long carddone = 0;
   static byte cardid[4] = {};
@@ -173,7 +175,7 @@ void loop()
   if (sendretry && (int)(sendretry - now) < 0)
   {
     presssend();
-    if (!(sendretry = now + 2000))sendretry++;
+    if (!(sendretry = now + SENDRETRY))sendretry++;
   }
   while (Serial.available() > 0)
   { // Get serial
@@ -208,8 +210,8 @@ void loop()
         presssend();
         MFRC522::PICC_Type piccType = rfid.PICC_GetType(rfid.uid.sak);
         memcpy(cardid, rfid.uid.uidByte, 4);
-        if (!(carddone = now + 10000))carddone++;
-        if (!(sendretry = now + 2000))sendretry++;
+        if (!(carddone = now + CARDWAIT))carddone++;
+        if (!(sendretry = now + SENDRETRY))sendretry++;
       }
     }
   }
