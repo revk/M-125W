@@ -161,12 +161,19 @@ void loop()
     digitalWrite(SEND, HIGH);
 #endif
   }
+  static long sendretry = 0;
   static long carddone = 0;
   static byte cardid[4] = {};
   if (carddone && (int)(carddone - now) < 0)
   { // Card read timed out
     report(cardid, NULL);
     carddone = 0;
+    sendretry = 0;
+  }
+  if (sendretry && (int)(sendretry - now) < 0)
+  {
+    presssend();
+    if (!(sendretry = now + 2000))sendretry++;
   }
   while (Serial.available() > 0)
   { // Get serial
@@ -185,6 +192,7 @@ void loop()
         if (carddone)report(cardid, p);
         else report(NULL, p);
         carddone = 0;
+        sendretry = 0;
       }
     }
   }
@@ -201,6 +209,7 @@ void loop()
         MFRC522::PICC_Type piccType = rfid.PICC_GetType(rfid.uid.sak);
         memcpy(cardid, rfid.uid.uidByte, 4);
         if (!(carddone = now + 10000))carddone++;
+        if (!(sendretry = now + 2000))sendretry++;
       }
     }
   }
