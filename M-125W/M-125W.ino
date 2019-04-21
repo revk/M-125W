@@ -4,7 +4,6 @@
 // ESP-12F based for use with MFRC522 to send on card read
 // Reporting via MQTT (note, this expected to be local and so non TLS)
 // Reporting via https to a server (CA by Let's Encrypt)
-//
 
 // Wiring (recommend a 4 pin header, see https://youtu.be/l1VAymhwtVM for details)
 // GND/3V3 to GND/VDD pads in middle (non display side of PCB)
@@ -19,7 +18,6 @@
 // GPIO12 MISO
 // GPIO14 SCK (CLK)
 // GPIO16 SDA (SS)
-
 
 #define SENDRETRY 1000  // Re-press send if no weight yet
 #define CARDWAIT 20000  // Wait for weight after getting card
@@ -211,12 +209,22 @@ void loop()
     {
       if (rfid.PICC_ReadCardSerial())
       {
-        presssend();
+
         MFRC522::PICC_Type piccType = rfid.PICC_GetType(rfid.uid.sak);
+        if (!carddone || memcmp(cardid, rfid.uid.uidByte, 4))
+        {
+          if (carddone)    report(cardid, NULL); // Change of card, report previous
+          revk.pub("stat", "id", "%02X%02X%02X%02X", rfid.uid.uidByte[0], rfid.uid.uidByte[1], rfid.uid.uidByte[2], rfid.uid.uidByte[3]);
+
+        }
         memcpy(cardid, rfid.uid.uidByte, 4);
+        if (!carddone)
+        {
+          presssend();
+          if (!(sendretry = now + SENDRETRY))
+            sendretry++;
+        }
         if (!(carddone = now + CARDWAIT))carddone++;
-        if (!(sendretry = now + SENDRETRY))sendretry++;
-        revk.pub("stat", "id", "%02X%02X%02X%02X", cardid[0], cardid[1], cardid[2], cardid[3]);
       }
     }
   }
