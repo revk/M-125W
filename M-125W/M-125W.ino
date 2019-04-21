@@ -119,8 +119,7 @@ int report(byte *id, char *weight)
     revk.pub("stat", "idweight", "%02X%02X%02X%02X %s", id[0], id[1], id[2], id[3], weight);
   else if (weight)
     revk.pub("stat", "weight", "%s", weight);
-  else if (id)
-    revk.pub("stat", "id", "%02X%02X%02X%02X", id[0], id[1], id[2], id[3]);
+
   if (!*cloudhost)return 404;
   // Post
   char url[500];
@@ -217,6 +216,7 @@ void loop()
         memcpy(cardid, rfid.uid.uidByte, 4);
         if (!(carddone = now + CARDWAIT))carddone++;
         if (!(sendretry = now + SENDRETRY))sendretry++;
+        revk.pub("stat", "id", "%02X%02X%02X%02X", cardid[0], cardid[1], cardid[2], cardid[3]);
       }
     }
   }
