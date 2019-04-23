@@ -43,7 +43,7 @@ char cloudpass[33] = "";
 #ifdef USE_SPI
 #include <SPI.h>
 #include <MFRC522.h>
-MFRC522 rfid(16, 2); // Instance of the class
+MFRC522 rfid(SS, RST); // Instance of the class
 #endif
 
 void pressend();
@@ -75,8 +75,7 @@ boolean app_cmnd(const char*suffix, const byte *message, size_t len)
 void setup()
 {
 #ifdef REVKDEBUG
-  rst_info *myResetInfo = ESP.getResetInfoPtr();
-  Serial.printf("App started %s (%d)\n", ESP.getResetReason().c_str(), myResetInfo->reason);
+  Serial.println("Started " __FILE__);
 #else
   Serial.begin(9600); // Marsden talks at 9600 Baud
   digitalWrite(SEND, HIGH);
@@ -130,8 +129,8 @@ int report(byte *id, char *weight)
   url[p] = 0;
   for (p = 0; url[p]; p++)if (url[p] == ' ')url[p] = '+';
   // Note, always https
-  WiFiClientSecure client = revk.leclient();
-  //client.setInsecure();
+  WiFiClientSecure client;
+  revk.clientTLS(client);
   HTTPClient https;
   https.begin(client, cloudhost, 443, url, true);
   int ret = https.GET();
