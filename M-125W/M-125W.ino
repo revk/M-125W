@@ -26,7 +26,7 @@
 #include <ESP8266HTTPClient.h>
 #include <ESP8266TrueRandom.h>
 
-ESP8266RevK revk(__FILE__, "Build: " __DATE__ " " __TIME__);
+ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
 
 #ifdef ARDUINO_ESP8266_NODEMCU
 #define USE_SPI
@@ -120,7 +120,7 @@ ESP8266RevK revk(__FILE__, "Build: " __DATE__ " " __TIME__);
     // Post
     char url[500];
     int m = sizeof(url) - 1, p = 0;
-    if (p < m)p += snprintf_P(url + p, m - p, PSTR("/weighin.cgi?version=%s"), __DATE__ " " __TIME__);
+    if (p < m)p += snprintf_P(url + p, m - p, PSTR("/weighin.cgi?version=%s"), revk.appver);
     if (p < m)p += snprintf_P(url + p, m - p, PSTR("&scales=%06X"), ESP.getChipId());
     if (p < m && cloudpass)p += snprintf_P(url + p, m - p, PSTR("&auth=%s"), cloudpass); // Assume no special characters
     if (p < m && weight)p += snprintf_P(url + p, m - p, PSTR("&weight=%s"), weight);
