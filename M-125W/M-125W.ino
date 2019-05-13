@@ -19,6 +19,8 @@
 // GPIO14 SCK (CLK)
 // GPIO16 SDA (SS)
 
+#define USE_PN532 // Use PN532 ratehr than MFRC522
+
 #define SENDRETRY 1000  // Re-press send if no weight yet
 #define CARDWAIT 20000  // Wait for weight after getting card
 
@@ -40,15 +42,21 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
   app_settings
 #undef s
 
-
 #define SEND  1 // Send button (TX pin)
 #define RST 2 // SPI
 #define SS 16 // SPI
 
 #ifdef USE_SPI
 #include <SPI.h>
+#ifdef USE_PN532
+#include <PN532_SPI.h>
+#include "PN532.h"
+  PN532_SPI pn532spi(SPI, SS);
+  PN532 nfc(pn532spi);
+#else
 #include <MFRC522.h>
-  MFRC522 rfid(SS, RST); // Instance of the class
+  MFRC522 nfc(SS, RST); // Instance of the class
+#endif
 #endif
 
   void pressend();
@@ -82,7 +90,16 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
 #endif
 #ifdef USE_SPI
     SPI.begin(); // Init SPI bus
-    rfid.PCD_Init(); // Init MFRC522
+#ifdef USE_PN532
+    nfc.begin();
+    SPI.setFrequency(100000);
+    if (!nfc.getFirmwareVersion())
+      debug("Failed PN532");
+    nfc.setPassiveActivationRetries(1);
+    nfc.SAMConfig();
+#else
+    nfc.PCD_Init(); // Init MFRC522
+#endif
 #endif
   }
 
@@ -102,7 +119,7 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
 #endif
   }
 
-  int report(byte *id, char *weight)
+  int report(char *id, char *weight)
   {
     if (!cloudpass)
     { // We need a password - make one - store in flash - so we use same every time
@@ -124,7 +141,7 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
     if (p < m)p += snprintf_P(url + p, m - p, PSTR("&scales=%06X"), ESP.getChipId());
     if (p < m && cloudpass)p += snprintf_P(url + p, m - p, PSTR("&auth=%s"), cloudpass); // Assume no special characters
     if (p < m && weight)p += snprintf_P(url + p, m - p, PSTR("&weight=%s"), weight);
-    if (p < m && id)p += snprintf_P(url + p, m - p, PSTR("&id=%02X%02X%02X%02X"), id[0], id[1], id[2], id[3]);
+    if (p < m && id)p += snprintf_P(url + p, m - p, PSTR("&id=%s"), id);
     url[p] = 0;
     for (p = 0; url[p]; p++)if (url[p] == ' ')url[p] = '+';
     // Note, always https
@@ -162,17 +179,17 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
     }
     static long sendretry = 0;
     static long carddone = 0;
-    static byte cardid[4] = {};
+    static char tid[15];
     if (carddone && (int)(carddone - now) < 0)
     { // Card read timed out
-      report(cardid, NULL);
+      report(tid, NULL);
       carddone = 0;
       sendretry = 0;
     }
     if (sendretry && (int)(sendretry - now) < 0)
     {
       presssend();
-      if (!(sendretry = now + SENDRETRY))sendretry++;
+      sendretry = (now + SENDRETRY ? : 1);
     }
     while (Serial.available() > 0)
     { // Get serial
@@ -190,8 +207,10 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
           while (*p == ' ')p++;
           if (*p != '0')
           { // Expect some weight - i.e. >=1 kg >=1 stone >=1 lb
-            if (carddone)report(cardid, p);
-            else report(NULL, p);
+            if (carddone)
+              report(tid, p);
+            else
+              report(NULL, p);
             carddone = 0;
             sendretry = 0;
           }
@@ -200,30 +219,26 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
     }
 #ifdef USE_SPI
     static long cardcheck = 0;
-    if ((int)(cardcheck - now) < 0)
+    if (revk.mqttconnected && !carddone && (int)(cardcheck - now) < 0)
     {
-      cardcheck = now + 10;
-      if (rfid.PICC_IsNewCardPresent())
+      cardcheck = now + 100;
+      byte uid[7], uidlen = 0;
+#ifdef USE_PN532
+      if (nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidlen))
+#else
+      if (nfc.PICC_IsNewCardPresent() && nfc.PICC_ReadCardSerial())
+#endif
       {
-        if (rfid.PICC_ReadCardSerial())
-        {
-
-          MFRC522::PICC_Type piccType = rfid.PICC_GetType(rfid.uid.sak);
-          if (!carddone || memcmp(cardid, rfid.uid.uidByte, 4))
-          {
-            if (carddone)    report(cardid, NULL); // Change of card, report previous
-            revk.event(F("id"), F("%02X%02X%02X%02X"), rfid.uid.uidByte[0], rfid.uid.uidByte[1], rfid.uid.uidByte[2], rfid.uid.uidByte[3]);
-
-          }
-          memcpy(cardid, rfid.uid.uidByte, 4);
-          if (!carddone)
-          {
-            presssend();
-            if (!(sendretry = now + SENDRETRY))
-              sendretry++;
-          }
-          if (!(carddone = now + CARDWAIT))carddone++;
-        }
+#ifndef USE_PN532
+        if (nfc.uid.size <= sizeof(uid))
+          memcpy(uid, nfc.uid.uidByte, uidlen = nfc.uid.size);
+#endif
+        int n;
+        for (n = 0; n < uidlen && n * 2 < sizeof(tid); n++)sprintf_P(tid + n * 2, PSTR("%02X"), uid[n]);
+        debugf("Id %s", tid);
+        revk.event(F("id"), F("%s"), tid);
+        presssend();
+        carddone = (now + CARDWAIT ? : 1);
       }
     }
 #endif
