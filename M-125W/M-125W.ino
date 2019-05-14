@@ -110,7 +110,7 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
   unsigned sendbutton = 0; // Signed to allow for wrap
   void presssend()
   {
-    if (!(sendbutton = millis() + 250))sendbutton++; // Dont allow 0 to happen
+    sendbutton = (millis() + 250 ? : 1);
 #ifdef REVKDEBUG
     Serial.println("Send low");
 #else
@@ -173,7 +173,7 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
 #ifdef REVKDEBUG
       Serial.println(F("Send high"));
 #else
-      pinMode(SEND, INPUT);
+      pinMode(SEND, INPUT_PULLUP);
       digitalWrite(SEND, HIGH);
 #endif
     }
@@ -238,6 +238,7 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
         debugf("Id %s", tid);
         revk.event(F("id"), F("%s"), tid);
         presssend();
+        sendretry = (now + SENDRETRY ? : 1);
         carddone = (now + CARDWAIT ? : 1);
       }
     }
