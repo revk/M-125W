@@ -130,7 +130,7 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
       revk.setting(F("cloudpass"), pass); // save
     }
     if (weight && id)
-      revk.event(F("idweight"), F("%02X%02X%02X%02X %s"), id[0], id[1], id[2], id[3], weight);
+      revk.event(F("idweight"), F("%s %s"), id, weight);
     else if (weight)
       revk.event(F("weight"), F("%s"), weight);
     if (!cloudhost)cloudhost = "weigh.me.uk";
