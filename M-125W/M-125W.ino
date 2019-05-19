@@ -60,6 +60,7 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
 #endif
 
   void pressend();
+  int report(char *id, char *weight);
 
   const char * app_setting(const char *tag, const byte *value, size_t len)
   { // Called for settings retrieved from EEPROM
@@ -76,6 +77,11 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
       presssend();
       return true;
     }
+    if (!strcasecmp_P(tag, PSTR("report")))
+    {
+      report(NULL, NULL);
+      return true;
+    }
     return false;
   }
 
@@ -86,7 +92,7 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
 #else
     Serial.begin(9600); // Marsden talks at 9600 Baud
     digitalWrite(SEND, HIGH);
-    pinMode(SEND, INPUT);
+    pinMode(SEND, INPUT_PULLUP);
 #endif
 #ifdef USE_SPI
     SPI.begin(); // Init SPI bus
@@ -121,14 +127,17 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
 
   int report(char *id, char *weight)
   {
+    revk.mqttcloseTLS(F("Post data")); // Clash on memory space for TLS?
     if (!cloudpass)
     { // We need a password - make one - store in flash - so we use same every time
+      debug("Cloud pass needed");
       int i;
       char pass[33];
       for (i = 0; i <  sizeof(pass) - 1; i++)pass[i] = 'A' + ESP8266TrueRandom.random(26);
       pass[i] = 0; // End
       revk.setting(F("cloudpass"), pass); // save
     }
+    debug("Report");
     if (weight && id)
       revk.event(F("idweight"), F("%s %s"), id, weight);
     else if (weight)
@@ -144,14 +153,17 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
     if (p < m && id)p += snprintf_P(url + p, m - p, PSTR("&id=%s"), id);
     url[p] = 0;
     for (p = 0; url[p]; p++)if (url[p] == ' ')url[p] = '+';
+    debugf("URL %s",url);
     // Note, always https
     WiFiClientSecure client;
     revk.clientTLS(client);
     HTTPClient https;
+    debugf("Connect %s",cloudhost);
     https.begin(client, cloudhost, 443, url, true);
     int ret = https.GET();
     https.end();
-    if (ret == HTTP_CODE_UPGRADE_REQUIRED)revk.ota(); // Upgrade required: New firmware required
+    if (ret == HTTP_CODE_UPGRADE_REQUIRED)
+      revk.ota(); // Upgrade required: New firmware required
     if (ret > 0 && ret != HTTP_CODE_OK && ret != HTTP_CODE_NO_CONTENT)
       revk.error(F("https"), F("Failed %d from %s"), ret, cloudhost);
     else if (ret < 0)
