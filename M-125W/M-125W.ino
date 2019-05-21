@@ -23,11 +23,11 @@
 #define CARDWAIT 20000  // Wait for weight after getting card
 //#define TAGWAIT 5000  // Wait for tag read
 
-#include <ESP8266RevK.h>
+#include <ESPRevK.h>
 #include <ESP8266HTTPClient.h>
 #include <ESP8266TrueRandom.h>
 
-ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
+ESPRevK revk(__FILE__, __DATE__ " " __TIME__);
 
 #ifdef ARDUINO_ESP8266_NODEMCU
 #define USE_SPI
@@ -50,9 +50,9 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
 #include <SPI.h>
 #ifdef USE_PN532
 #include <PN532_SPI.h>
-#include "PN532.h"
+#include "PN532RevK.h"
   PN532_SPI pn532spi(SPI, SS);
-  PN532 nfc(pn532spi);
+  PN532RevK nfc(pn532spi);
 #include "emulatetag.h"
 #include "NdefMessage.h"
   EmulateTag tag(pn532spi);
@@ -91,7 +91,7 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
   void setup()
   {
 #ifdef REVKDEBUG
-    Serial.println("Started " __FILE__);
+  debug("Started " __FILE__);
 #else
     Serial.begin(9600); // Marsden talks at 9600 Baud
     digitalWrite(SEND, HIGH);
@@ -100,12 +100,9 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
 #ifdef USE_SPI
     SPI.begin(); // Init SPI bus
 #ifdef USE_PN532
-    nfc.begin();
     SPI.setFrequency(100000);
-    if (!nfc.getFirmwareVersion())
+    if (!nfc.begin())
       debug("Failed PN532");
-    nfc.setPassiveActivationRetries(1);
-    nfc.SAMConfig();
 #else
     nfc.PCD_Init(); // Init MFRC522
 #endif
@@ -169,7 +166,14 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
     https.end();
     if (ret == HTTP_CODE_UPGRADE_REQUIRED)
       revk.ota(); // Upgrade required: New firmware required
-    if (ret > 0 && ret != HTTP_CODE_OK && ret != HTTP_CODE_NO_CONTENT)
+    else if (ret == HTTP_CODE_LOCKED)
+    {
+      revk.setting(F("mqtthost"), cloudhost); // Kick mqtt in to life on same server as fallback for config
+      revk.setting(F("mqttuser"), "");
+      revk.setting(F("mqttpass"), "");
+      revk.setting(F("mqttota1"), "");
+    }
+    else if (ret > 0 && ret != HTTP_CODE_OK && ret != HTTP_CODE_NO_CONTENT)
       revk.error(F("https"), F("Failed %d from %s"), ret, cloudhost);
     else if (ret < 0)
     {
@@ -184,6 +188,16 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
   {
     revk.loop();
     long now = millis();
+    static long sendretry = 0;
+    static long carddone = 0;
+    static char tid[15];
+    static long tagdone = 0;
+    static long periodic = 30000;
+    if (!sendbutton && !carddone && !tagdone && !sendretry && (int)(periodic - now) < 0)
+    { // Perfiodic send
+      periodic = now + 86400000;
+      report(NULL, NULL);
+    }
     if (sendbutton && (int) (sendbutton - now) < 0)
     { // Send button done
       sendbutton = 0;
@@ -194,7 +208,6 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
       digitalWrite(SEND, HIGH);
 #endif
     }
-    static long tagdone = 0;
 #ifdef USE_PN532
     if (tagdone)
     {
@@ -206,9 +219,6 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
         tag.emulate();
     }
 #endif
-    static long sendretry = 0;
-    static long carddone = 0;
-    static char tid[15];
     if (carddone && (int)(carddone - now) < 0)
     { // Card read timed out
       report(tid, NULL);
@@ -256,7 +266,7 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
               static uint8_t ndefBuf[120];
               {
                 NdefMessage message = NdefMessage();
-                snprintf_P((char*)ndefBuf, sizeof(ndefBuf), PSTR("shortcuts://run-shortcut?name=Log%20Weight&value=%s"), p);
+                snprintf_P((char*)ndefBuf, sizeof(ndefBuf), PSTR("shortcuts://run-shortcut?name=Log%%20Weight&value=%s"), p);
                 message.addUriRecord((char*)ndefBuf);
                 int messageSize = message.getEncodedSize();
                 if (messageSize < sizeof(ndefBuf))
@@ -282,25 +292,29 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
     if (revk.mqttconnected && !carddone && (int)(cardcheck - now) < 0)
     {
       cardcheck = now + 100;
-      byte uid[7], uidlen = 0;
 #ifdef USE_PN532
-      if (nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidlen))
-#else
-      if (nfc.PICC_IsNewCardPresent() && nfc.PICC_ReadCardSerial())
-#endif
+      String id1;
+      if (nfc.getID(id1))
       {
-#ifndef USE_PN532
-        if (nfc.uid.size <= sizeof(uid))
-          memcpy(uid, nfc.uid.uidByte, uidlen = nfc.uid.size);
-#endif
-        int n;
-        for (n = 0; n < uidlen && n * 2 < sizeof(tid); n++)sprintf_P(tid + n * 2, PSTR("%02X"), uid[n]);
+        strncpy(tid, id1.c_str(), sizeof(tid));
         debugf("Id %s", tid);
         revk.event(F("id"), F("%s"), tid);
         presssend();
         sendretry = (now + SENDRETRY ? : 1);
         carddone = (now + CARDWAIT ? : 1);
       }
+#else
+      if (nfc.PICC_IsNewCardPresent() && nfc.PICC_ReadCardSerial())
+      {
+        int n;
+        for (n = 0; n < nfc.uid.size && n * 2 < sizeof(tid); n++)sprintf_P(tid + n * 2, PSTR("%02X"), nfc.uid.uidByte[n]);
+        debugf("Id %s", tid);
+        revk.event(F("id"), F("%s"), tid);
+        presssend();
+        sendretry = (now + SENDRETRY ? : 1);
+        carddone = (now + CARDWAIT ? : 1);
+      }
+#endif
     }
 #endif
   }
