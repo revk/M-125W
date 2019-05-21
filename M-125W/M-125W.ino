@@ -2,8 +2,8 @@
 // ESP-01 based for simple reporting of weight on SEND button
 // Option to force send using cmnd/app/host/send
 // ESP-12F based for use with MFRC522 to send on card read
-// Reporting via MQTT (note, this expected to be local and so non TLS)
-// Reporting via https to a server (CA by Let's Encrypt)
+// reporting via MQTT (note, this expected to be local and so non TLS)
+// reporting via https to a server (CA by Let's Encrypt)
 
 // Wiring (recommend a 4 pin header, see https://youtu.be/l1VAymhwtVM for details)
 // GND/3V3 to GND/VDD pads in middle (non display side of PCB)
@@ -19,10 +19,9 @@
 // GPIO14 SCK (CLK)
 // GPIO16 SDA (SS)
 
-#define USE_PN532 // Use PN532 ratehr than MFRC522
-
 #define SENDRETRY 1000  // Re-press send if no weight yet
 #define CARDWAIT 20000  // Wait for weight after getting card
+//#define TAGWAIT 5000  // Wait for tag read
 
 #include <ESP8266RevK.h>
 #include <ESP8266HTTPClient.h>
@@ -32,6 +31,7 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
 
 #ifdef ARDUINO_ESP8266_NODEMCU
 #define USE_SPI
+#define USE_PN532 // Use PN532 ratehr than MFRC522
 #endif
 
 #define app_settings \
@@ -53,6 +53,9 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
 #include "PN532.h"
   PN532_SPI pn532spi(SPI, SS);
   PN532 nfc(pn532spi);
+#include "emulatetag.h"
+#include "NdefMessage.h"
+  EmulateTag tag(pn532spi);
 #else
 #include <MFRC522.h>
   MFRC522 nfc(SS, RST); // Instance of the class
@@ -60,7 +63,7 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
 #endif
 
   void pressend();
-  int report(char *id, char *weight);
+  int report(const char *id, const char *weight);
 
   const char * app_setting(const char *tag, const byte *value, size_t len)
   { // Called for settings retrieved from EEPROM
@@ -113,10 +116,12 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
   char line[MAX_LINE + 1];
   int linep = 0;
 
-  unsigned sendbutton = 0; // Signed to allow for wrap
+  unsigned int sendbutton = 0; // Signed to allow for wrap
+  unsigned int sendlast = 0; // Last send button
   void presssend()
   {
-    sendbutton = (millis() + 250 ? : 1);
+    sendlast = millis();
+    sendbutton = (sendlast + 250 ? : 1);
 #ifdef REVKDEBUG
     Serial.println("Send low");
 #else
@@ -125,7 +130,7 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
 #endif
   }
 
-  int report(char *id, char *weight)
+  int report(const char *id, const char *weight)
   {
     revk.mqttcloseTLS(F("Post data")); // Clash on memory space for TLS?
     if (!cloudpass)
@@ -137,7 +142,7 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
       pass[i] = 0; // End
       revk.setting(F("cloudpass"), pass); // save
     }
-    debug("Report");
+    debug("report");
     if (weight && id)
       revk.event(F("idweight"), F("%s %s"), id, weight);
     else if (weight)
@@ -153,12 +158,12 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
     if (p < m && id)p += snprintf_P(url + p, m - p, PSTR("&id=%s"), id);
     url[p] = 0;
     for (p = 0; url[p]; p++)if (url[p] == ' ')url[p] = '+';
-    debugf("URL %s",url);
+    debugf("URL %s", url);
     // Note, always https
     WiFiClientSecure client;
     revk.clientTLS(client);
     HTTPClient https;
-    debugf("Connect %s",cloudhost);
+    debugf("Connect %s", cloudhost);
     https.begin(client, cloudhost, 443, url, true);
     int ret = https.GET();
     https.end();
@@ -189,6 +194,18 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
       digitalWrite(SEND, HIGH);
 #endif
     }
+    static long tagdone = 0;
+#ifdef USE_PN532
+    if (tagdone)
+    {
+      if ((int)(tagdone - now) < 0)
+      { // Tag time out
+        nfc.begin(); // Normal -- TODO not working as expected
+        tagdone = 0;
+      } else
+        tag.emulate();
+    }
+#endif
     static long sendretry = 0;
     static long carddone = 0;
     static char tid[15];
@@ -197,6 +214,7 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
       report(tid, NULL);
       carddone = 0;
       sendretry = 0;
+      *tid = 0;
     }
     if (sendretry && (int)(sendretry - now) < 0)
     {
@@ -217,12 +235,42 @@ ESP8266RevK revk(__FILE__, __DATE__ " " __TIME__);
         { // Time to send
           char *p = line + 10;
           while (*p == ' ')p++;
-          if (*p != '0')
+          if (*p == '0')
+          {
+            if (!carddone && (int)(now - sendlast) > SENDRETRY * 2)
+            { // Unsolicited, got 0, so set up retry
+              sendretry = (now + SENDRETRY ? : 1);
+              carddone = (now + CARDWAIT ? : 1);
+            }
+          }
+          else
           { // Expect some weight - i.e. >=1 kg >=1 stone >=1 lb
-            if (carddone)
+            if (carddone && *tid)
               report(tid, p);
-            else
-              report(NULL, p);
+            else if ((int)(now - sendlast) > SENDRETRY * 2)
+            {
+              report(NULL, p); // Unsolicited send
+#ifdef TAGWAIT
+#ifdef USE_PN532
+              tagdone = (now + TAGWAIT ? : 1);
+              static uint8_t ndefBuf[120];
+              {
+                NdefMessage message = NdefMessage();
+                snprintf_P((char*)ndefBuf, sizeof(ndefBuf), PSTR("shortcuts://run-shortcut?name=Log%20Weight&value=%s"), p);
+                message.addUriRecord((char*)ndefBuf);
+                int messageSize = message.getEncodedSize();
+                if (messageSize < sizeof(ndefBuf))
+                {
+                  message.encode(ndefBuf);
+                  tag.setNdefFile(ndefBuf, messageSize);
+                  //tag.setUid(ESP.getChipId ());
+                  tag.init();
+                }
+              }
+#endif
+#endif
+              *tid = 0;
+            }
             carddone = 0;
             sendretry = 0;
           }
