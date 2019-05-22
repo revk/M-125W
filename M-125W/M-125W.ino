@@ -31,7 +31,7 @@ ESPRevK revk(__FILE__, __DATE__ " " __TIME__);
 
 #ifdef ARDUINO_ESP8266_NODEMCU
 #define USE_SPI
-#define USE_PN532 // Use PN532 ratehr than MFRC522
+#define USE_PN532 // Use PN532 rather than MFRC522
 #endif
 
 #define app_settings \
@@ -53,9 +53,12 @@ ESPRevK revk(__FILE__, __DATE__ " " __TIME__);
 #include "PN532RevK.h"
   PN532_SPI pn532spi(SPI, SS);
   PN532RevK nfc(pn532spi);
+  uint32_t pn532ver = 0;
+#ifdef TAGWAIT
 #include "emulatetag.h"
 #include "NdefMessage.h"
   EmulateTag tag(pn532spi);
+#endif
 #else
 #include <MFRC522.h>
   MFRC522 nfc(SS, RST); // Instance of the class
@@ -91,7 +94,7 @@ ESPRevK revk(__FILE__, __DATE__ " " __TIME__);
   void setup()
   {
 #ifdef REVKDEBUG
-  debug("Started " __FILE__);
+    debug("Started " __FILE__);
 #else
     Serial.begin(9600); // Marsden talks at 9600 Baud
     digitalWrite(SEND, HIGH);
@@ -100,9 +103,8 @@ ESPRevK revk(__FILE__, __DATE__ " " __TIME__);
 #ifdef USE_SPI
     SPI.begin(); // Init SPI bus
 #ifdef USE_PN532
-    SPI.setFrequency(100000);
-    if (!nfc.begin())
-      debug("Failed PN532");
+    pn532ver = nfc.begin();
+    SPI.setFrequency(100000); // Is this needed
 #else
     nfc.PCD_Init(); // Init MFRC522
 #endif
@@ -153,6 +155,11 @@ ESPRevK revk(__FILE__, __DATE__ " " __TIME__);
     if (p < m && cloudpass)p += snprintf_P(url + p, m - p, PSTR("&auth=%s"), cloudpass); // Assume no special characters
     if (p < m && weight)p += snprintf_P(url + p, m - p, PSTR("&weight=%s"), weight);
     if (p < m && id)p += snprintf_P(url + p, m - p, PSTR("&id=%s"), id);
+#ifdef USE_PN532
+    if (p < m && pn532ver)p += snprintf_P(url + p, m - p, PSTR("&reader=PN532-%08X"), pn532ver);
+#else
+    if (p < m && pn532ver)p += snprintf_P(url + p, m - p, PSTR("&reader=MFRC522"));
+#endif
     url[p] = 0;
     for (p = 0; url[p]; p++)if (url[p] == ' ')url[p] = '+';
     debugf("URL %s", url);
@@ -195,6 +202,10 @@ ESPRevK revk(__FILE__, __DATE__ " " __TIME__);
     static long periodic = 30000;
     if (!sendbutton && !carddone && !tagdone && !sendretry && (int)(periodic - now) < 0)
     { // Perfiodic send
+#ifdef USE_PN532
+      if (!pn532ver && !(pn532ver = nfc.begin()))
+        revk.error(F("PM532 failed"));
+#endif
       periodic = now + 86400000;
       report(NULL, NULL);
     }
@@ -208,6 +219,7 @@ ESPRevK revk(__FILE__, __DATE__ " " __TIME__);
       digitalWrite(SEND, HIGH);
 #endif
     }
+#ifdef TAGWAIT
 #ifdef USE_PN532
     if (tagdone)
     {
@@ -218,6 +230,7 @@ ESPRevK revk(__FILE__, __DATE__ " " __TIME__);
       } else
         tag.emulate();
     }
+#endif
 #endif
     if (carddone && (int)(carddone - now) < 0)
     { // Card read timed out

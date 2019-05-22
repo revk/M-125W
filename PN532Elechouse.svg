@@ -25,11 +25,11 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="9.8876015"
-     inkscape:cx="80.615497"
+     inkscape:zoom="9.9269161"
+     inkscape:cx="80.21095"
      inkscape:cy="61.123421"
      inkscape:document-units="mm"
-     inkscape:current-layer="layer6"
+     inkscape:current-layer="layer7"
      showgrid="true"
      units="in"
      objecttolerance="20"
@@ -581,13 +581,12 @@
      inkscape:label="Edge 1mm"
      style="display:inline"
      transform="translate(0.18999913,-4.4950051)">
-    <rect
+    <path
        style="opacity:1;fill:none;fill-opacity:1;fill-rule:evenodd;stroke:#ff00ff;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       d="M 0.31000087,4.9950051 H 36.235 V 22.005005 l -3.039998,3.040001 H 3.3500007 L 0.31000087,22.005005 Z"
        id="rect1155"
-       width="35.924999"
-       height="20.050001"
-       x="0.31000087"
-       y="4.9950051" />
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="ccccccc" />
   </g>
   <g
      inkscape:groupmode="layer"
@@ -595,6 +594,18 @@
      inkscape:label="Track mill &lt; 0.3mm"
      style="display:inline"
      transform="translate(0.18999913,-4.4950051)">
+    <g
+       transform="matrix(-0.32304636,0,0,-0.32340752,39.945698,106.37408)"
+       id="layer1-3"
+       inkscape:label="Layer 1"
+       style="stroke:#ff0000;stroke-width:0.92814058;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1">
+      <path
+         sodipodi:nodetypes="ccccccccsc"
+         inkscape:connector-curvature="0"
+         d="m 24.999999,265.65622 h -5 m 11.000001,-7 -6.000001,7 6.000001,7 m -16,0 10,-14 -1e-6,14 c 1e-6,1.38071 -1.119287,2.5 -2.499999,2.5 -1.380712,0 -2.5,-1.11929 -2.5,-2.5"
+         style="opacity:1;fill:none;fill-opacity:1;fill-rule:evenodd;stroke:#ff0000;stroke-width:0.92814058;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         id="path26" />
+    </g>
     <g
        transform="matrix(0.2591343,0,0,0.2591343,33.146838,-70.901445)"
        id="layer1-938"
@@ -606,18 +617,6 @@
        d="m 8.4300007,22.110039 h 1.0399871 v 1.164967 M 27.469988,13.235003 h -6.974987 m 6.974987,-2.095 8.900014,0.07 M 20.495001,7.235009 h 8.255001 v 1.4349963 h 7.62 m -15.875001,6.5649997 6.974987,-2e-6 M 0.17499461,18.830005 H 7.5099883 l 1.27,-1.595002 H 12.589988 M 0.17499461,16.290005 H 7.5099883 l 0.635,-1.055002 H 12.589988 M 0.17499461,13.750005 H 7.5099883 l 0.635,-0.515001 H 12.589988 M 0.17500051,11.210005 H 7.5099883 l 0.635,0.025 h 4.4449997 v 7.995042 l -3.8099997,-10e-7 -1.27,2.13996 H 0.17499461 m 5.9e-6,-12.7000014 H 7.5099883 l 0.635,0.5649988 H 14.145001 V 20.100006 l 0.635,0.635 v 4.445 M 7.7950012,4.8600052 l -4e-7,1.905 0.3499875,0.4700044 H 14.145001 V 4.8600052 m 6.35,6.3749978 h 6.985001 m 8.89,2.515002 h -7.62 v 8.255001 H 17.320001 v 3.175 m 3.175,-15.9450028 6.974987,-2e-7 0.01001,8.000002 H 20.495001 V 4.8600052"
        inkscape:connector-curvature="0"
        sodipodi:nodetypes="ccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" />
-    <g
-       transform="matrix(0.35609113,0,0,0.35648923,24.061177,-75.918151)"
-       id="layer1-3"
-       inkscape:label="Layer 1"
-       style="stroke:#ff0000;stroke-width:0.8420105;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1">
-      <path
-         sodipodi:nodetypes="ccccccccsc"
-         inkscape:connector-curvature="0"
-         d="m 24.999998,271 h -5 m 11.000001,-7 -6.000001,7 6.000001,7 m -16,0 10,-14 -10e-7,14 c 10e-7,1.38071 -1.119287,2.5 -2.499999,2.5 -1.380712,0 -2.5,-1.11929 -2.5,-2.5"
-         style="opacity:1;fill:none;fill-opacity:1;fill-rule:evenodd;stroke:#ff0000;stroke-width:0.8420105;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
-         id="path26" />
-    </g>
     <path
        style="opacity:1;fill:none;fill-opacity:1;fill-rule:evenodd;stroke:#ff0000;stroke-width:0.30000001;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
        d="m 25.469989,22.110039 v 1.164967"
@@ -631,13 +630,12 @@
      inkscape:label="Track mill &lt; 0.5mm"
      transform="translate(1.9999987,-12.949993)"
      style="display:inline">
-    <rect
+    <path
        style="opacity:1;fill:none;fill-opacity:1;fill-rule:evenodd;stroke:#ff0000;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       d="M -0.99999875,13.949994 H 33.925 v 16.478481 l -2.539997,2.571518 H 1.5400011 l -2.53999985,-2.54 z"
        id="rect1153"
-       width="34.924999"
-       height="19.049999"
-       x="-0.99999875"
-       y="13.949994" />
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="ccccccc" />
   </g>
   <g
      inkscape:groupmode="layer"
