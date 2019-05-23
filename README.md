@@ -10,4 +10,6 @@ See https://youtu.be/l1VAymhwtVM for details of wiring.
 
 Press "SEND" on scales to send a weight.
 
+Also PCB and instructions for use with PN532 card reader.
+
 (c) 2019 Andrews & Arnold Ltd, Adrian Kennard. See LICENSE file (GPL).
