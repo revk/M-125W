@@ -27,7 +27,7 @@
 #include <ESP8266HTTPClient.h>
 #include <ESP8266TrueRandom.h>
 
-ESPRevK revk(__FILE__, __DATE__ " " __TIME__);
+ESPRevK revk(__FILE__, __DATE__ " " __TIME__,NULL);
 
 #ifdef ARDUINO_ESP8266_NODEMCU
 #define USE_SPI
@@ -101,10 +101,8 @@ ESPRevK revk(__FILE__, __DATE__ " " __TIME__);
     pinMode(SEND, INPUT_PULLUP);
 #endif
 #ifdef USE_SPI
-    SPI.begin(); // Init SPI bus
 #ifdef USE_PN532
     pn532ver = nfc.begin();
-    SPI.setFrequency(100000); // Is this needed
 #else
     nfc.PCD_Init(); // Init MFRC522
 #endif
@@ -148,18 +146,13 @@ ESPRevK revk(__FILE__, __DATE__ " " __TIME__);
       revk.event(F("weight"), F("%s"), weight);
     if (!cloudhost)cloudhost = "weigh.me.uk";
     // Post
-    char url[500];
+    char url[250];
     int m = sizeof(url) - 1, p = 0;
     if (p < m)p += snprintf_P(url + p, m - p, PSTR("/weighin.cgi?version=%s"), revk.appver);
     if (p < m)p += snprintf_P(url + p, m - p, PSTR("&scales=%06X"), ESP.getChipId());
     if (p < m && cloudpass)p += snprintf_P(url + p, m - p, PSTR("&auth=%s"), cloudpass); // Assume no special characters
     if (p < m && weight)p += snprintf_P(url + p, m - p, PSTR("&weight=%s"), weight);
     if (p < m && id)p += snprintf_P(url + p, m - p, PSTR("&id=%s"), id);
-#ifdef USE_PN532
-    if (p < m && pn532ver)p += snprintf_P(url + p, m - p, PSTR("&reader=PN532-%08X"), pn532ver);
-#else
-    if (p < m && pn532ver)p += snprintf_P(url + p, m - p, PSTR("&reader=MFRC522"));
-#endif
     url[p] = 0;
     for (p = 0; url[p]; p++)if (url[p] == ' ')url[p] = '+';
     debugf("URL %s", url);
@@ -176,9 +169,10 @@ ESPRevK revk(__FILE__, __DATE__ " " __TIME__);
     else if (ret == HTTP_CODE_LOCKED)
     {
       revk.setting(F("mqtthost"), cloudhost); // Kick mqtt in to life on same server as fallback for config
-      revk.setting(F("mqttuser"), "");
-      revk.setting(F("mqttpass"), "");
-      revk.setting(F("mqttota1"), "");
+      revk.setting(F("mqttuser"));
+      revk.setting(F("mqttpass"));
+      revk.setting(F("mqttota1"));
+      revk.setting(F("mqttport"));
     }
     else if (ret > 0 && ret != HTTP_CODE_OK && ret != HTTP_CODE_NO_CONTENT)
       revk.error(F("https"), F("Failed %d from %s"), ret, cloudhost);
@@ -302,7 +296,7 @@ ESPRevK revk(__FILE__, __DATE__ " " __TIME__);
     }
 #ifdef USE_SPI
     static long cardcheck = 0;
-    if (revk.mqttconnected && !carddone && (int)(cardcheck - now) < 0)
+    if (revk.wificonnected && !carddone && (int)(cardcheck - now) < 0)
     {
       cardcheck = now + 100;
 #ifdef USE_PN532
