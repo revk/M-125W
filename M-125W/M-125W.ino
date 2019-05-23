@@ -27,7 +27,7 @@
 #include <ESP8266HTTPClient.h>
 #include <ESP8266TrueRandom.h>
 
-ESPRevK revk(__FILE__, __DATE__ " " __TIME__,NULL);
+ESPRevK revk(__FILE__, __DATE__ " " __TIME__,"");
 
 #ifdef ARDUINO_ESP8266_NODEMCU
 #define USE_SPI
