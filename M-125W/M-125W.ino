@@ -27,7 +27,7 @@
 #include <ESP8266HTTPClient.h>
 #include <ESP8266TrueRandom.h>
 
-ESPRevK revk(__FILE__, __DATE__ " " __TIME__,"");
+ESPRevK revk(__FILE__, __DATE__ " " __TIME__, NULL, ""); // Default is no MQTT
 
 #ifdef ARDUINO_ESP8266_NODEMCU
 #define USE_SPI
@@ -201,6 +201,7 @@ ESPRevK revk(__FILE__, __DATE__ " " __TIME__,"");
         revk.error(F("PM532 failed"));
 #endif
       periodic = now + 86400000;
+      if (!revk.get_mqttsha1())revk.setting(F("mqtthost")); // Default is no MQTT
       report(NULL, NULL);
     }
     if (sendbutton && (int) (sendbutton - now) < 0)
