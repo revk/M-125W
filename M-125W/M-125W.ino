@@ -66,7 +66,7 @@ ESPRevK revk(__FILE__, __DATE__ " " __TIME__, NULL, ""); // Default is no MQTT
 #endif
 
   void pressend();
-  int report(const char *id, const char *weight);
+  boolean report(const char *id, const char *weight);
 
   const char * app_setting(const char *tag, const byte *value, size_t len)
   { // Called for settings retrieved from EEPROM
@@ -84,10 +84,7 @@ ESPRevK revk(__FILE__, __DATE__ " " __TIME__, NULL, ""); // Default is no MQTT
       return true;
     }
     if (!strcasecmp_P(tag, PSTR("report")))
-    {
-      report(NULL, NULL);
-      return true;
-    }
+      return report(NULL, NULL);
     return false;
   }
 
@@ -127,9 +124,12 @@ ESPRevK revk(__FILE__, __DATE__ " " __TIME__, NULL, ""); // Default is no MQTT
 #endif
   }
 
-  int report(const char *id, const char *weight)
+  unsigned int autoreport = 30000;
+  boolean report(const char *id, const char *weight)
   {
-    revk.mqttcloseTLS(F("Post data")); // Clash on memory space for TLS?
+    autoreport = millis() + 8640000;
+    if (revk.get_mqttsha1())
+      revk.mqttclose(F("Post data")); // Clash on memory space for TLS?
     if (!cloudpass)
     { // We need a password - make one - store in flash - so we use same every time
       debug("Cloud pass needed");
@@ -164,25 +164,31 @@ ESPRevK revk(__FILE__, __DATE__ " " __TIME__, NULL, ""); // Default is no MQTT
     https.begin(client, cloudhost, 443, url, true);
     int ret = https.GET();
     https.end();
+    debugf("Response %d", ret);
+    if (revk.get_mqttsha1())
+      revk.mqttopen();
     if (ret == HTTP_CODE_UPGRADE_REQUIRED)
       revk.ota(); // Upgrade required: New firmware required
-    else if (ret == HTTP_CODE_LOCKED)
-    {
-      revk.setting(F("mqtthost"), cloudhost); // Kick mqtt in to life on same server as fallback for config
-      revk.setting(F("mqttuser"));
-      revk.setting(F("mqttpass"));
-      revk.setting(F("mqttota1"));
-      revk.setting(F("mqttport"));
+    else if (ret == HTTP_CODE_LOCKED || ret < 0)
+    { // Connection error, or specific code to force MQTT connect
+      if (ret < 0)
+      { // Connection error
+        char err[100];
+        client.getLastSSLError(err, sizeof(err));
+        revk.error(F("https"), F("Failed %s: %s from %s"), https.errorToString(ret).c_str(), err,  cloudhost);
+      }
+      if (!revk.get_mqttsha1())
+      { // We are not using secure MQTT, so connect insecurely for a short time
+        revk.setting(F("mqtthost"), cloudhost); // Kick mqtt in to life on same server as fallback for config
+        revk.setting(F("mqttuser"));
+        revk.setting(F("mqttpass"));
+        revk.setting(F("mqttport"));
+        autoreport = millis() + 300000; // Stay on mqtt for limited time as no security
+      }
     }
     else if (ret > 0 && ret != HTTP_CODE_OK && ret != HTTP_CODE_NO_CONTENT)
       revk.error(F("https"), F("Failed %d from %s"), ret, cloudhost);
-    else if (ret < 0)
-    {
-      char err[100];
-      client.getLastSSLError(err, sizeof(err));
-      revk.error(F("https"), F("Failed %s: %s from %s"), https.errorToString(ret).c_str(), err,  cloudhost);
-    }
-    return ret;
+    return (ret / 100) == 2;
   }
 
   void loop()
@@ -193,15 +199,10 @@ ESPRevK revk(__FILE__, __DATE__ " " __TIME__, NULL, ""); // Default is no MQTT
     static long carddone = 0;
     static char tid[15];
     static long tagdone = 0;
-    static long periodic = 30000;
-    if (!sendbutton && !carddone && !tagdone && !sendretry && (int)(periodic - now) < 0)
-    { // Perfiodic send
-#ifdef USE_PN532
-      if (!pn532ver && !(pn532ver = nfc.begin()))
-        revk.error(F("PM532 failed"));
-#endif
-      periodic = now + 86400000;
-      if (!revk.get_mqttsha1())revk.setting(F("mqtthost")); // Default is no MQTT
+    if (!sendbutton && !carddone && !tagdone && !sendretry && (int)(autoreport - now) < 0)
+    { // Periodic/auto send
+      if (!revk.get_mqttsha1())
+        revk.setting(F("mqtthost")); // Turn off MQTT
       report(NULL, NULL);
     }
     if (sendbutton && (int) (sendbutton - now) < 0)
@@ -264,10 +265,20 @@ ESPRevK revk(__FILE__, __DATE__ " " __TIME__, NULL, ""); // Default is no MQTT
           else
           { // Expect some weight - i.e. >=1 kg >=1 stone >=1 lb
             if (carddone && *tid)
-              report(tid, p);
-            else if ((int)(now - sendlast) > SENDRETRY * 2)
             {
-              report(NULL, p); // Unsolicited send
+              if (report(tid, p))
+              { // Reported, stop
+                carddone = 0;
+                sendretry = 0;
+              }
+            }
+            else if ((int)(now - sendlast) > SENDRETRY * 2)
+            { // Weight with no tag
+              if (report(NULL, p))
+              { // Reported, stop
+                carddone = 0;
+                sendretry = 0;
+              }
 #ifdef TAGWAIT
 #ifdef USE_PN532
               tagdone = (now + TAGWAIT ? : 1);
@@ -289,8 +300,7 @@ ESPRevK revk(__FILE__, __DATE__ " " __TIME__, NULL, ""); // Default is no MQTT
 #endif
               *tid = 0;
             }
-            carddone = 0;
-            sendretry = 0;
+
           }
         }
       }
