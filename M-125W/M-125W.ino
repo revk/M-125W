@@ -156,14 +156,18 @@ ESPRevK revk(__FILE__, __DATE__ " " __TIME__, NULL, ""); // Default is no MQTT
     url[p] = 0;
     for (p = 0; url[p]; p++)if (url[p] == ' ')url[p] = '+';
     debugf("URL %s", url);
-    // Note, always https
-    WiFiClientSecure client;
-    revk.clientTLS(client);
-    HTTPClient https;
-    debugf("Connect %s", cloudhost);
-    https.begin(client, cloudhost, 443, url, true);
-    int ret = https.GET();
-    https.end();
+    char err[100];
+    int ret;
+    { // Note, always https
+      WiFiClientSecure client;
+      revk.clientTLS(client);
+      HTTPClient https;
+      debugf("Connect %s", cloudhost);
+      https.begin(client, cloudhost, 443, url, true);
+      ret = https.GET();
+      https.end();
+      client.getLastSSLError(err, sizeof(err));
+    }
     debugf("Response %d", ret);
     if (revk.get_mqttsha1())
       revk.mqttopen();
@@ -172,11 +176,7 @@ ESPRevK revk(__FILE__, __DATE__ " " __TIME__, NULL, ""); // Default is no MQTT
     else if (ret == HTTP_CODE_LOCKED || ret < 0)
     { // Connection error, or specific code to force MQTT connect
       if (ret < 0)
-      { // Connection error
-        char err[100];
-        client.getLastSSLError(err, sizeof(err));
-        revk.error(F("https"), F("Failed %s: %s from %s"), https.errorToString(ret).c_str(), err,  cloudhost);
-      }
+        revk.error(F("https"), F("Failed %d: %s from %s"), err, cloudhost); // Connection error
       if (!revk.get_mqttsha1())
       { // We are not using secure MQTT, so connect insecurely for a short time
         revk.setting(F("mqtthost"), cloudhost); // Kick mqtt in to life on same server as fallback for config
@@ -188,6 +188,7 @@ ESPRevK revk(__FILE__, __DATE__ " " __TIME__, NULL, ""); // Default is no MQTT
     }
     else if (ret > 0 && ret != HTTP_CODE_OK && ret != HTTP_CODE_NO_CONTENT)
       revk.error(F("https"), F("Failed %d from %s"), ret, cloudhost);
+    debug("Report done");
     return (ret / 100) == 2;
   }
 
