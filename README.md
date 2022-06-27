@@ -1,3 +1,5 @@
+## OBSOLETE CODE - SEE https://github.com/revk/ESP32-M125
+
 Connects to an MQTT server.
 Looks for weight logs from scales.
 Inserts in to SQL database.
