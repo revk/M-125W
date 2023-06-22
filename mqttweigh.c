@@ -80,8 +80,8 @@ main (int argc, const char *argv[])
 #else
    const char *prefix = NULL;
 #endif
+   poptContext optCon;          // context for parsing command-line options
    {                            // POPT
-      poptContext optCon;       // context for parsing command-line options
       const struct poptOption optionsTable[] = {
 	      // *INDENT-OFF*
          {"mqtt-host", 'h', POPT_ARG_STRING | (mqtthost ? POPT_ARGFLAG_SHOW_DEFAULT : 0), &mqtthost, 0, "MQTT hostname", "Hostname"},
@@ -114,7 +114,6 @@ main (int argc, const char *argv[])
          poptPrintUsage (optCon, stderr, 0);
          return -1;
       }
-      poptFreeContext (optCon);
    }
 
    SQL sql;
@@ -221,5 +220,6 @@ main (int argc, const char *argv[])
    mosquitto_lib_cleanup ();
 
    sql_close (&sql);
+   poptFreeContext (optCon);
    return 0;
 }
